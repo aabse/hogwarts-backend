@@ -1,0 +1,406 @@
+{
+  "info": {
+    "name": "Hogwarts API",
+    "_postman_id": "b3dbe3a6-6fdf-4f47-9f5a-6bdf0a6b2c9b",
+    "description": "Collection with the APIs for the current microservices (Wizard and Inventory).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "wizardBaseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "inventoryBaseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "duelBaseUrl",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "wizardId",
+      "value": "1"
+    },
+    {
+      "key": "wandId",
+      "value": "1"
+    },
+    {
+      "key": "duelId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Wizard",
+      "item": [
+        {
+          "name": "List Wizards (no filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards?page=0&size=20&sort=id,desc",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards"
+              ],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "sort", "value": "id,desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Wizards (filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards?house=Gryffindor&name=har&page=0&size=20&sort=id,desc",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards"
+              ],
+              "query": [
+                { "key": "house", "value": "Gryffindor" },
+                { "key": "name", "value": "har" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "sort", "value": "id,desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Wizard",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Harry Potter\",\n  \"house\": \"Gryffindor\"\n}"
+            },
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Wizard By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards/{{wizardId}}",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards",
+                "{{wizardId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Patch Wizard",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Harry J. Potter\"\n}"
+            },
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards/{{wizardId}}",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards",
+                "{{wizardId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Wizard",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards/{{wizardId}}",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards",
+                "{{wizardId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Attack (Duel inside Wizard)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attackerId\": 1,\n  \"defenderId\": 2\n}"
+            },
+            "url": {
+              "raw": "{{wizardBaseUrl}}/api/wizards/attack",
+              "host": [
+                "{{wizardBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wizards",
+                "attack"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Create Wand",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wood\": \"Holly\",\n  \"core\": \"Phoenix feather\",\n  \"length\": 11.0,\n  \"description\": \"Highly compatible with its wizard\"\n}"
+            },
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/wands",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "wands"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Wands (filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/wands?wood=Holly&assigned=false&page=0&size=20&sort=id,desc",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "wands"
+              ],
+              "query": [
+                { "key": "wood", "value": "Holly" },
+                { "key": "assigned", "value": "false" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "sort", "value": "id,desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assign Wand To Wizard",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wizardId\": {{wizardId}}\n}"
+            },
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/wands/{{wandId}}/assign",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "wands",
+                "{{wandId}}",
+                "assign"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Potion",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Felix Felicis\",\n  \"effect\": \"Suerte temporal\",\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/potions",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "potions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Potions (filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/potions?name=felix&minQuantity=0&page=0&size=20&sort=id,desc",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "potions"
+              ],
+              "query": [
+                { "key": "name", "value": "felix" },
+                { "key": "minQuantity", "value": "0" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "sort", "value": "id,desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Broom",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"Nimbus 2000\",\n  \"speedRating\": 95,\n  \"quantity\": 3\n}"
+            },
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/brooms",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "brooms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Brooms (filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryBaseUrl}}/api/inventory/brooms?model=nimbus&minSpeed=50&page=0&size=20&sort=id,desc",
+              "host": [
+                "{{inventoryBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "brooms"
+              ],
+              "query": [
+                { "key": "model", "value": "nimbus" },
+                { "key": "minSpeed", "value": "50" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "sort", "value": "id,desc" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Duel",
+      "item": [
+        {
+          "name": "Create Duel",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attackerId\": 1,\n  \"defenderId\": 2\n}"
+            },
+            "url": {
+              "raw": "{{duelBaseUrl}}/api/duels",
+              "host": ["{{duelBaseUrl}}"],
+              "path": ["api", "duels"]
+            }
+          }
+        },
+        {
+          "name": "Get Duel By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{duelBaseUrl}}/api/duels/{{duelId}}",
+              "host": ["{{duelBaseUrl}}"],
+              "path": ["api", "duels", "{{duelId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

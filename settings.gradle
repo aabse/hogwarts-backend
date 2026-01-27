@@ -1,0 +1,5 @@
+rootProject.name = 'hogwarts-backend'
+
+include 'wizard-service'
+include 'inventory-service'
+include 'duel-service'

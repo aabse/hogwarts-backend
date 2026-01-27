@@ -1,0 +1,151 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+    id 'com.diffplug.spotless' version '8.1.0' apply false
+}
+
+group = 'com.magic'
+version = '0.0.1-SNAPSHOT'
+description = 'hogwarts'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'checkstyle'
+    apply plugin: 'com.diffplug.spotless'
+    apply plugin: 'jacoco'
+
+    group = rootProject.group
+    version = rootProject.version
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    jacoco {
+        toolVersion = '0.8.12'
+    }
+
+    checkstyle {
+        toolVersion = '12.3.1'
+        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+        configProperties = [
+                'checkstyle.suppressions.file': rootProject.file('config/checkstyle/suppressions.xml').absolutePath
+        ]
+    }
+
+    tasks.withType(Checkstyle).configureEach {
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    spotless {
+        java {
+            // Keep formatting consistent across modules
+            googleJavaFormat()
+            formatAnnotations()
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+    }
+
+    // Ensure formatting is validated as part of `check`
+    tasks.named('check') {
+        dependsOn 'spotlessCheck'
+    }
+
+    tasks.named('test') {
+        finalizedBy 'jacocoTestReport'
+    }
+
+    tasks.named('jacocoTestReport') {
+        dependsOn 'test'
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+}
+
+tasks.register('testAll') {
+    dependsOn(subprojects.collect { it.tasks.matching { t -> t.name == 'test' } })
+}
+
+def coverageExclusions = [
+        '**/*Application.*',
+        '**/*DTO.*',
+        '**/common/**',
+        '**/domain/model/**',
+        '**/infrastructure/persistence/**',
+        '**/package-info.*'
+]
+
+tasks.register('jacocoRootReport', JacocoReport) {
+    dependsOn subprojects.collect { it.tasks.matching { t -> t.name == 'test' } }
+
+    jacocoClasspath = configurations.jacocoAnt
+
+    executionData.from(
+            subprojects.collect { p ->
+                p.fileTree(p.buildDir).matching { include 'jacoco/test.exec', 'jacoco/test*.exec' }
+            }
+    )
+
+    classDirectories.from(
+            files(subprojects.collect { it.sourceSets.main.output }).asFileTree.matching {
+                exclude coverageExclusions
+            }
+    )
+    sourceDirectories.from files(subprojects.collect { it.sourceSets.main.allSource.srcDirs })
+
+    reports {
+        xml.required = true
+        html.required = true
+
+        xml.outputLocation = layout.buildDirectory.file('reports/jacoco/jacocoRootReport/jacocoRootReport.xml')
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/jacocoRootReport/html')
+    }
+}
+
+tasks.register('jacocoRootCoverageVerification', JacocoCoverageVerification) {
+    dependsOn 'jacocoRootReport'
+
+    executionData.from(tasks.named('jacocoRootReport').get().executionData)
+    classDirectories.from(tasks.named('jacocoRootReport').get().classDirectories)
+    sourceDirectories.from(tasks.named('jacocoRootReport').get().sourceDirectories)
+
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'jacocoRootCoverageVerification'
+}
