@@ -35,3 +35,15 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Configuración local / secretos ###
+.claude/settings.local.json
+.cursor/
+.env
+.env.*
+*.env
+*.local.sh
+*-key.json
+*.pem
+*.p12
+*.jks
