@@ -59,4 +59,4 @@ build/
 - **Dockerfile**: la etapa de build de [`wizard-service/Dockerfile`](07_wizard_service.md) copia `gradlew`, `gradlew.bat` y la carpeta `gradle/` al contenedor y ejecuta `./gradlew :wizard-service:bootJar` dentro de la imagen — el wrapper es lo que permite compilar sin necesitar una imagen base con Gradle preinstalado.
 - **Buildpacks**: Cloud Native Buildpacks para Java/Gradle también detecta y usa `gradlew` automáticamente dentro del directorio del módulo (ver [`README.md`](README.md)).
 
-Ver también: [`02_build_gradle_raiz.md`](02_build_gradle_raiz.md), [`03_settings_gradle.md`](03_settings_gradle.md).
+Ver también: [`02_root_build_gradle.md`](02_root_build_gradle.md), [`03_settings_gradle.md`](03_settings_gradle.md).

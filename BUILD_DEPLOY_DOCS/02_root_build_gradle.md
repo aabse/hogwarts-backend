@@ -73,7 +73,7 @@ subprojects {
 }
 ```
 
-Esa versión da nombre al jar (`wizard-service-0.0.1-SNAPSHOT.jar`) y es también el tag de la imagen de contenedor. Las reglas para incrementarla (versionado semántico `MAJOR.MINOR.PATCH`) y el flujo de release están en [`../DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md`](../DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md) §4.
+Esa versión da nombre al jar (`wizard-service-0.0.1-SNAPSHOT.jar`) y es también el tag de la imagen de contenedor. Las reglas para incrementarla (versionado semántico `MAJOR.MINOR.PATCH`) y el flujo de release están en [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md) §4.
 
 Como `gradle.properties` está dentro de la carpeta del servicio, también funciona en el build aislado de Buildpacks.
 

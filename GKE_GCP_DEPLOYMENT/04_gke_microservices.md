@@ -9,7 +9,7 @@ Desplegar los 3 microservicios (`wizard-service`, `inventory-service`, `duel-ser
 - Esta guía describe pasos en GCP + comandos `gcloud` y `kubectl`.
 - No modifica el código del repositorio.
 - Los manifiestos Kubernetes (`Deployment`, `Service`) se crean **fuera del repo**, en un directorio de trabajo local (ej. `~/hogwarts-gcp/k8s`), como archivos de configuración de infraestructura, no como parte del código fuente.
-- Asume que ya construiste y publicaste imágenes en Artifact Registry (ver `03_artifact_registry_y_builds.md`).
+- Asume que ya construiste y publicaste imágenes en Artifact Registry (ver `03_artifact_registry_and_builds.md`).
 
 ### Los 3 microservicios a desplegar
 
@@ -74,7 +74,7 @@ Antes de crear nada, conviene tener claro cómo se relacionan las piezas que vas
 
 El diagrama siguiente resume estas relaciones:
 
-![Conceptos GKE: Cluster, Nodos, Pods, Deployment y Service](diagrams/gke_conceptos.svg)
+![Conceptos GKE: Cluster, Nodos, Pods, Deployment y Service](diagrams/gke_concepts.svg)
 
 *Lectura del diagrama: el cliente llama al **Service** (flecha gris, `HTTP :80`); el Service enruta ese tráfico (flechas azules, `selector: app=...`) hacia los **Pods**, que corren dentro de los **Nodos** agrupados en el **Cluster**. Por separado, el **Deployment** declara y vigila esas réplicas de Pods (flechas violeta punteadas) — no participa en el tráfico de red, solo en su ciclo de vida.*
 
@@ -128,7 +128,7 @@ Si ya instalaste `kubectl` y `gke-gcloud-auth-plugin` siguiendo la guía `00` (s
 CRITICAL: ACTION REQUIRED: gke-gcloud-auth-plugin, which is needed for continued use of kubectl, was not found or is not executable.
 ```
 
-El `kubeconfig entry generated for ...` que aparece después **sí se generó igual** — el error es solo una advertencia de que ese kubeconfig no va a poder autenticarse todavía. Instala el plugin como se indica en `00_prerequisitos_locales_y_herramientas.md` y luego vuelve a ejecutar `get-credentials` para regenerar el kubeconfig:
+El `kubeconfig entry generated for ...` que aparece después **sí se generó igual** — el error es solo una advertencia de que ese kubeconfig no va a poder autenticarse todavía. Instala el plugin como se indica en `00_local_prerequisites_and_tools.md` y luego vuelve a ejecutar `get-credentials` para regenerar el kubeconfig:
 
 ```bash
 gcloud container clusters get-credentials "$CLUSTER_NAME" --region="$REGION" --project="$PROJECT_ID"
@@ -518,7 +518,7 @@ También puedes ver logs agregados en Cloud Console → Logging → filtrando po
 
 ## 9) Actualizar una imagen ya desplegada
 
-Cuando publiques una versión nueva de la imagen (flujo de release en `03_artifact_registry_y_builds.md` §4.6), apunta el `Deployment` a su tag semántico:
+Cuando publiques una versión nueva de la imagen (flujo de release en `03_artifact_registry_and_builds.md` §4.6), apunta el `Deployment` a su tag semántico:
 
 ```bash
 export WIZARD_VERSION=1.4.0   # la versión recién publicada
@@ -540,7 +540,7 @@ Cuando ya verificaste que funcionan:
 
 - Reemplazar los `Service` de tipo `LoadBalancer` (uno por microservicio, cada uno con IP pública propia) por:
   - Un único `Ingress` (con Ingress Controller de GKE) que exponga las rutas necesarias, o
-  - `Service` de tipo `ClusterIP` + API Gateway al frente (ver guía `09_segurizacion_apis_identity_platform.md`).
+  - `Service` de tipo `ClusterIP` + API Gateway al frente (ver guía `09_api_security_identity_platform.md`).
 - Definir `NetworkPolicy` para restringir qué Pods pueden hablar entre sí.
 - Usar **Workload Identity** para que cada Pod tenga el mínimo de permisos IAM necesarios, en vez de la cuenta de servicio default de los nodos.
 - Configurar `HorizontalPodAutoscaler` por microservicio si esperas carga variable.

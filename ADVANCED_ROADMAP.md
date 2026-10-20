@@ -1,4 +1,4 @@
-# ROADMAP_AVANZADO — Spring Boot (nivel avanzado) + Microservicios + GCP (GKE)
+# ADVANCED_ROADMAP — Spring Boot (nivel avanzado) + Microservicios + GCP (GKE)
 
 Este documento propone un backlog/roadmap **orientado a aprendizaje profundo** de Spring y a una evolución realista hacia **microservicios por dominio** con despliegue en **GCP**.  
 La idea es que cada épica te obligue a tocar temas “de verdad”: consistencia, resiliencia, testing serio, observabilidad, seguridad, CI/CD, infraestructura.

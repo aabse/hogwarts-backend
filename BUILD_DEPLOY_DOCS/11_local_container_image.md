@@ -4,7 +4,7 @@ Archivos cubiertos:
 
 - [`wizard-service/Dockerfile`](../wizard-service/Dockerfile)
 
-Este documento complementa [`07_wizard_service.md`](07_wizard_service.md): explica el concepto de "imagen de contenedor" desde cero y detalla, paso a paso, cómo construirla y correrla en la máquina local usando el único `Dockerfile` real del repo. No cubre el flujo de despliegue a GKE (eso está en [`README.md`](README.md#5-fase-de-despliegue-gke) y en [`../DESPLIEGUE_GKE_GCP/`](../DESPLIEGUE_GKE_GCP/)) — aquí el alcance es exclusivamente **local**.
+Este documento complementa [`07_wizard_service.md`](07_wizard_service.md): explica el concepto de "imagen de contenedor" desde cero y detalla, paso a paso, cómo construirla y correrla en la máquina local usando el único `Dockerfile` real del repo. No cubre el flujo de despliegue a GKE (eso está en [`README.md`](README.md#5-fase-de-despliegue-gke) y en [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/)) — aquí el alcance es exclusivamente **local**.
 
 ## 1. Qué es una imagen de contenedor
 
@@ -53,7 +53,7 @@ docker run -p 8080:8080 wizard-service:local
 - `-p 8080:8080`: publica el puerto 8080 del contenedor (el que el `Dockerfile` declara con `EXPOSE 8080` y en el que Spring Boot escucha por defecto) en el puerto 8080 del host. Formato: `-p <puerto_host>:<puerto_contenedor>`.
 - `wizard-service:local`: la imagen construida en el paso anterior.
 
-El contenedor arranca `ENTRYPOINT ["java", "-jar", "app.jar"]`, levanta el contexto de Spring Boot con su base H2 en memoria (igual que corriendo `bootRun` en local, ver [`10_ejecucion_bootrun_vs_ide.md`](10_ejecucion_bootrun_vs_ide.md)), y queda escuchando en `localhost:8080`.
+El contenedor arranca `ENTRYPOINT ["java", "-jar", "app.jar"]`, levanta el contexto de Spring Boot con su base H2 en memoria (igual que corriendo `bootRun` en local, ver [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md)), y queda escuchando en `localhost:8080`.
 
 ### 3.3. Verificar que responde
 
@@ -92,6 +92,6 @@ flowchart TD
 
 - Este flujo es **puramente local**: no publica la imagen en ningún registry ni la conecta con GCP. Para eso está la sección 4.a del [`README.md`](README.md#4-fase-de-empaquetado-dos-procesos-separados) (Cloud Native Buildpacks + Artifact Registry), que es el mecanismo real usado para desplegar.
 - `inventory-service` y `duel-service` usan el mismo camino (mismo `docker build`/`docker run`, cambiando el nombre del módulo y el `-f`), con sus propios `Dockerfile` — ver [`08_inventory_service.md`](08_inventory_service.md) y [`09_duel_service.md`](09_duel_service.md).
-- El tag `:local` es solo para pruebas en tu máquina. Para publicar en Artifact Registry, el tag es la versión semántica del servicio (de su `gradle.properties`), ver `DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md` §4.
+- El tag `:local` es solo para pruebas en tu máquina. Para publicar en Artifact Registry, el tag es la versión semántica del servicio (de su `gradle.properties`), ver `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4.
 
-Ver también: [`07_wizard_service.md`](07_wizard_service.md), [`10_ejecucion_bootrun_vs_ide.md`](10_ejecucion_bootrun_vs_ide.md).
+Ver también: [`07_wizard_service.md`](07_wizard_service.md), [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md).

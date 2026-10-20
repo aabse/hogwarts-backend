@@ -1,5 +1,5 @@
 # Dockerfile educativo — no usado por el flujo de despliegue documentado en
-# DESPLIEGUE_GKE_GCP (que usa Cloud Build + buildpacks). Sirve para comparar
+# GKE_GCP_DEPLOYMENT (que usa Cloud Build + buildpacks). Sirve para comparar
 # manualmente los mismos pasos que un buildpack hace por vos.
 #
 # El build context debe ser la RAIZ del repo (no esta carpeta), porque este

@@ -22,7 +22,7 @@ build/
 └── tmp/             # archivos temporales de tareas de Gradle
 ```
 
-Es aquí donde aterrizan, entre otras cosas, las salidas de las tareas custom definidas en [`build.gradle`](02_build_gradle_raiz.md): `jacocoRootReport` escribe explícitamente en `build/reports/jacoco/jacocoRootReport/`. En cada subproyecto, `build/libs/*.jar` es el artefacto que produce `bootJar` y que consume el `Dockerfile` de `wizard-service` (`COPY --from=build /workspace/wizard-service/build/libs/*.jar app.jar`, ver [`07_wizard_service.md`](07_wizard_service.md)).
+Es aquí donde aterrizan, entre otras cosas, las salidas de las tareas custom definidas en [`build.gradle`](02_root_build_gradle.md): `jacocoRootReport` escribe explícitamente en `build/reports/jacoco/jacocoRootReport/`. En cada subproyecto, `build/libs/*.jar` es el artefacto que produce `bootJar` y que consume el `Dockerfile` de `wizard-service` (`COPY --from=build /workspace/wizard-service/build/libs/*.jar app.jar`, ver [`07_wizard_service.md`](07_wizard_service.md)).
 
 ## `/.gradle` (raíz)
 

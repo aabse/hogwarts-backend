@@ -5,7 +5,7 @@ Archivos cubiertos:
 - [`config/checkstyle/checkstyle.xml`](../config/checkstyle/checkstyle.xml)
 - [`config/checkstyle/suppressions.xml`](../config/checkstyle/suppressions.xml)
 
-Se documentan juntos porque están conectados directamente: `checkstyle.xml` declara un `SuppressionFilter` que lee `suppressions.xml`, y ambos son referenciados desde el bloque `checkstyle { ... }` de [`build.gradle`](02_build_gradle_raiz.md).
+Se documentan juntos porque están conectados directamente: `checkstyle.xml` declara un `SuppressionFilter` que lee `suppressions.xml`, y ambos son referenciados desde el bloque `checkstyle { ... }` de [`build.gradle`](02_root_build_gradle.md).
 
 ## Cómo se conectan con Gradle
 

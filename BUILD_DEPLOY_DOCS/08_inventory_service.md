@@ -51,8 +51,8 @@ tasks.named('test') {
 Es prácticamente idéntico al de [`wizard-service`](07_wizard_service.md): mismo Spring Boot 4.0.1, mismas dependencias base (`data-jpa`, `webmvc`, `validation`, Lombok, H2 en runtime, PostgreSQL + conector de Cloud SQL para el perfil `gcp`, mismo set de dependencias de test). Como los otros módulos:
 
 - **Autocontenido a propósito**: declara las versiones de sus plugins y dependencias y su propio `repositories { mavenCentral() }`, aunque el root ya lo define. Así compila aunque Cloud Build reciba solo esta carpeta (build con Buildpacks). Por la misma razón no usa el catálogo `gradle/libs.versions.toml` del root.
-- **Versión propia** en [`inventory-service/gradle.properties`](../inventory-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): es el nombre del jar y el tag de su imagen, y se incrementa con versionado semántico independiente de los otros servicios (ver [`02_build_gradle_raiz.md`](02_build_gradle_raiz.md#versión-de-cada-servicio) y `DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md` §4).
-- Hereda del [`build.gradle` raíz](02_build_gradle_raiz.md) el `group`, el toolchain de Java 17 y Checkstyle/Spotless/JaCoCo.
+- **Versión propia** en [`inventory-service/gradle.properties`](../inventory-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): es el nombre del jar y el tag de su imagen, y se incrementa con versionado semántico independiente de los otros servicios (ver [`02_root_build_gradle.md`](02_root_build_gradle.md#versión-de-cada-servicio) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4).
+- Hereda del [`build.gradle` raíz](02_root_build_gradle.md) el `group`, el toolchain de Java 17 y Checkstyle/Spotless/JaCoCo.
 
 **Única diferencia relevante frente a `wizard-service`/`duel-service`**: **no incluye** `spring-retry` ni `spring-aspects`. Esto es coherente con que `inventory-service` no expone (por ahora) ninguna operación con manejo explícito de reintentos por bloqueo optimista — a diferencia del "ataque" de wizards o la creación de duelos, la asignación de varas no requiere ese mecanismo.
 
@@ -60,7 +60,7 @@ Es prácticamente idéntico al de [`wizard-service`](07_wizard_service.md): mism
 
 ```dockerfile
 # Dockerfile educativo — no usado por el flujo de despliegue documentado en
-# DESPLIEGUE_GKE_GCP (que usa Cloud Build + buildpacks). Sirve para comparar
+# GKE_GCP_DEPLOYMENT (que usa Cloud Build + buildpacks). Sirve para comparar
 # manualmente los mismos pasos que un buildpack hace por vos.
 #
 # El build context debe ser la RAIZ del repo (no esta carpeta), porque este
@@ -98,4 +98,4 @@ Sigue el mismo patrón multi-stage que [`wizard-service/Dockerfile`](07_wizard_s
 docker build -f inventory-service/Dockerfile -t inventory-service:local .
 ```
 
-Como el de `wizard-service`, es **educativo**: el flujo de despliegue documentado (GKE + Buildpacks, ver [`README.md`](README.md) y `DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md`) construye la imagen directamente desde `inventory-service/` con `gcloud builds submit --pack`, sin usar este archivo. En los dos caminos, la imagen se publica con la versión de `inventory-service/gradle.properties` como tag (guía 03 §4.7).
+Como el de `wizard-service`, es **educativo**: el flujo de despliegue documentado (GKE + Buildpacks, ver [`README.md`](README.md) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) construye la imagen directamente desde `inventory-service/` con `gcloud builds submit --pack`, sin usar este archivo. En los dos caminos, la imagen se publica con la versión de `inventory-service/gradle.properties` como tag (guía 03 §4.7).

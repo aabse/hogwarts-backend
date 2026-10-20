@@ -1,4 +1,4 @@
-## DESPLIEGUE_GKE_GCP — Guías paso a paso
+## GKE_GCP_DEPLOYMENT — Guías paso a paso
 
 Este directorio contiene guías **paso a paso** para desplegar los microservicios de este repo en **Google Cloud Platform (GCP)** usando **Google Kubernetes Engine (GKE)**, migrar persistencia a **Cloud SQL (PostgreSQL)**, definir **interacción segura** entre microservicios, y **segurizar** APIs con **Identity Platform**.
 
@@ -37,16 +37,16 @@ flowchart TD
     04 -.complemento visual.-> 12["12 · Diagrama Dockerfile→GKE"]
 ```
 
-1. `00_prerequisitos_locales_y_herramientas.md`
-2. `01_creacion_cuenta_gcp.md`
-3. `02_creacion_proyecto_gcp.md`
-4. `03_artifact_registry_y_builds.md`
-5. `04_microservicios_gke.md`
-6. `05_secret_manager_y_configuracion_por_ambiente.md`
-7. `06_base_de_datos_cloud_sql.md` — o, como alternativa sin presupuesto, `07_alternativa_postgres_gratis_vm.md`
-8. `08_interaccion_entre_microservicios_validacion_ids.md`
-9. `09_segurizacion_apis_identity_platform.md`
-10. `10_observabilidad_logging_monitoring.md`
-11. `11_checklist_produccion_y_costos.md`
+1. `00_local_prerequisites_and_tools.md`
+2. `01_gcp_account_setup.md`
+3. `02_gcp_project_setup.md`
+4. `03_artifact_registry_and_builds.md`
+5. `04_gke_microservices.md`
+6. `05_secret_manager_and_environment_config.md`
+7. `06_cloud_sql_database.md` — o, como alternativa sin presupuesto, `07_free_postgres_vm_alternative.md`
+8. `08_microservice_interaction_id_validation.md`
+9. `09_api_security_identity_platform.md`
+10. `10_observability_logging_monitoring.md`
+11. `11_production_checklist_and_costs.md`
 
-Diagrama complementario (opcional): `12_diagrama_flujo_dockerfile_artifact_registry_gke.md` — resume visualmente el camino `Dockerfile` → `docker push` a Artifact Registry → deploy en GKE.
+Diagrama complementario (opcional): `12_flow_diagram_dockerfile_artifact_registry_gke.md` — resume visualmente el camino `Dockerfile` → `docker push` a Artifact Registry → deploy en GKE.

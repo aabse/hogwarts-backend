@@ -2,12 +2,12 @@
 
 ### Objetivo
 
-Documentar cómo tener una base de datos PostgreSQL "real" (no H2 en memoria) **sin costo**, corriendo en una VM `e2-micro` de Compute Engine dentro del **Always Free tier** de GCP — como alternativa a [`06_base_de_datos_cloud_sql.md`](06_base_de_datos_cloud_sql.md) para cuando el presupuesto es literalmente cero, no solo bajo.
+Documentar cómo tener una base de datos PostgreSQL "real" (no H2 en memoria) **sin costo**, corriendo en una VM `e2-micro` de Compute Engine dentro del **Always Free tier** de GCP — como alternativa a [`06_cloud_sql_database.md`](06_cloud_sql_database.md) para cuando el presupuesto es literalmente cero, no solo bajo.
 
 ### Alcance (importante)
 
 - Esta guía describe pasos en GCP y configuración de la VM. **No modifica el código del repositorio.**
-- Los "ajustes en código" (sección 7) se describen como **instrucciones** para que tú los apliques si corresponde — mismo criterio que el resto de `DESPLIEGUE_GKE_GCP/` (ver [`README.md`](README.md)).
+- Los "ajustes en código" (sección 7) se describen como **instrucciones** para que tú los apliques si corresponde — mismo criterio que el resto de `GKE_GCP_DEPLOYMENT/` (ver [`README.md`](README.md)).
 - **Esta opción no es apta para producción real.** Es la contraparte "sin presupuesto" de la Opción Básica de Cloud SQL: sin SLA, sin alta disponibilidad, sin backups automáticos, con mantenimiento del sistema operativo y de PostgreSQL a tu cargo. Úsala para dev/pruebas/demos personales, no para datos reales de usuarios.
 
 ---
@@ -147,7 +147,7 @@ sudo docker run -d \
 
 ### 4.4 Crear las bases y usuarios (uno por microservicio)
 
-Mismo criterio que la Opción A de [`06_base_de_datos_cloud_sql.md`](06_base_de_datos_cloud_sql.md#11-una-instancia-vs-varias-instancias): una instancia, tres bases.
+Mismo criterio que la Opción A de [`06_cloud_sql_database.md`](06_cloud_sql_database.md#11-una-instancia-vs-varias-instancias): una instancia, tres bases.
 
 ```bash
 sudo docker exec -it hogwarts-postgres psql -U postgres -c "
@@ -195,7 +195,7 @@ Si responde el prompt de `psql`, la VM está aceptando conexiones externas.
 
 ## 7) Ajustes necesarios en la aplicación (solo instrucciones, sin modificar este repo)
 
-Similar a la sección 6 de [`06_base_de_datos_cloud_sql.md`](06_base_de_datos_cloud_sql.md#6-ajustes-necesarios-en-la-aplicación-solo-instrucciones-sin-modificar-este-repo), pero con conexión JDBC TCP directa a la IP pública de la VM — acá no aplica el Cloud SQL Auth Proxy ni el Java Connector porque no hay una instancia de Cloud SQL, es un Postgres corriendo en una VM cualquiera.
+Similar a la sección 6 de [`06_cloud_sql_database.md`](06_cloud_sql_database.md#6-ajustes-necesarios-en-la-aplicación-solo-instrucciones-sin-modificar-este-repo), pero con conexión JDBC TCP directa a la IP pública de la VM — acá no aplica el Cloud SQL Auth Proxy ni el Java Connector porque no hay una instancia de Cloud SQL, es un Postgres corriendo en una VM cualquiera.
 
 ### 7.1 Cambiar el driver runtime
 
@@ -215,13 +215,13 @@ spring.datasource.password=${WIZARD_DB_PASSWORD}
 spring.jpa.hibernate.ddl-auto=validate
 ```
 
-Repetir con `inventory_db`/`inventory_user` y `duel_db`/`duel_user` en los otros dos módulos. Los valores sensibles (`${VM_EXTERNAL_IP}`, `${WIZARD_DB_PASSWORD}`) se inyectan como variables de entorno o Secret Manager en el Pod de GKE — mismo mecanismo que la sección 5 y 8 de [`06_base_de_datos_cloud_sql.md`](06_base_de_datos_cloud_sql.md) y [`05_secret_manager_y_configuracion_por_ambiente.md`](05_secret_manager_y_configuracion_por_ambiente.md).
+Repetir con `inventory_db`/`inventory_user` y `duel_db`/`duel_user` en los otros dos módulos. Los valores sensibles (`${VM_EXTERNAL_IP}`, `${WIZARD_DB_PASSWORD}`) se inyectan como variables de entorno o Secret Manager en el Pod de GKE — mismo mecanismo que la sección 5 y 8 de [`06_cloud_sql_database.md`](06_cloud_sql_database.md) y [`05_secret_manager_and_environment_config.md`](05_secret_manager_and_environment_config.md).
 
 **Simplificación real respecto a Cloud SQL**: no hace falta el sidecar Cloud SQL Auth Proxy ni el Java Connector — el Pod llega a la VM por su IP pública igual que llegaría a cualquier otro host de Internet. Esa simplicidad es, justamente, la otra cara de exponer el puerto 5432 públicamente (sección 3).
 
 ### 7.3 Migraciones (igual recomendación que en Cloud SQL)
 
-No depender de `ddl-auto=create`/`update` a largo plazo — usar Flyway o Liquibase para un esquema versionado y reproducible (ver sección 6.3 de [`06_base_de_datos_cloud_sql.md`](06_base_de_datos_cloud_sql.md)).
+No depender de `ddl-auto=create`/`update` a largo plazo — usar Flyway o Liquibase para un esquema versionado y reproducible (ver sección 6.3 de [`06_cloud_sql_database.md`](06_cloud_sql_database.md)).
 
 ---
 
@@ -264,4 +264,4 @@ flowchart TD
 - Si en algún momento el presupuesto lo permite, migrar a Cloud SQL (sección 6) o configurar peering de VPC para dejar de exponer el puerto 5432 a Internet.
 - No usar esta configuración con datos reales de usuarios — está pensada para desarrollo y demos.
 
-Ver también: [`06_base_de_datos_cloud_sql.md`](06_base_de_datos_cloud_sql.md), [`05_secret_manager_y_configuracion_por_ambiente.md`](05_secret_manager_y_configuracion_por_ambiente.md).
+Ver también: [`06_cloud_sql_database.md`](06_cloud_sql_database.md), [`05_secret_manager_and_environment_config.md`](05_secret_manager_and_environment_config.md).

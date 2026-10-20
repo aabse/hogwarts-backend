@@ -135,6 +135,6 @@ With `--spring.profiles.active=gcp` each service connects to Cloud SQL (PostgreS
 
 ## Documentation
 
-- [`DESPLIEGUE_GKE_GCP/`](DESPLIEGUE_GKE_GCP/README.md): step-by-step deployment guides for GKE/GCP (Artifact Registry, Cloud SQL, Secret Manager, Identity Platform, observability).
-- [`DOCUMENTACION_BUILD_DEPLOY/`](DOCUMENTACION_BUILD_DEPLOY/README.md): build setup (Gradle wrapper, Checkstyle, per-service modules, container images).
-- [`DEPENDENCIAS.md`](DEPENDENCIAS.md), [`DTOs.md`](DTOs.md), [`SPECIFICATIONS_SPRING.md`](SPECIFICATIONS_SPRING.md), [`ROADMAP_AVANZADO.md`](ROADMAP_AVANZADO.md)
+- [`GKE_GCP_DEPLOYMENT/`](GKE_GCP_DEPLOYMENT/README.md): step-by-step deployment guides for GKE/GCP (Artifact Registry, Cloud SQL, Secret Manager, Identity Platform, observability).
+- [`BUILD_DEPLOY_DOCS/`](BUILD_DEPLOY_DOCS/README.md): build setup (Gradle wrapper, Checkstyle, per-service modules, container images).
+- [`DEPENDENCIES.md`](DEPENDENCIES.md), [`DTOs.md`](DTOs.md), [`SPECIFICATIONS_SPRING.md`](SPECIFICATIONS_SPRING.md), [`ADVANCED_ROADMAP.md`](ADVANCED_ROADMAP.md)

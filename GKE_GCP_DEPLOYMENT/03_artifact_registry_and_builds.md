@@ -191,7 +191,7 @@ gcloud auth configure-docker "$REGION-docker.pkg.dev"
 
 ### 3-bis.3 Build y push de `wizard-service`
 
-Este módulo ya tiene un `Dockerfile` real en el repo (`wizard-service/Dockerfile`), documentado en `DOCUMENTACION_BUILD_DEPLOY/11_imagen_de_contenedor_local.md`. El build context debe ser la **raíz del repo** (no `wizard-service/`), porque es un build multi-módulo Gradle y la etapa de compilación necesita el wrapper y los tres módulos:
+Este módulo ya tiene un `Dockerfile` real en el repo (`wizard-service/Dockerfile`), documentado en `BUILD_DEPLOY_DOCS/11_local_container_image.md`. El build context debe ser la **raíz del repo** (no `wizard-service/`), porque es un build multi-módulo Gradle y la etapa de compilación necesita el wrapper y los tres módulos:
 
 ```bash
 docker build -f wizard-service/Dockerfile -t "$WIZARD_IMAGE" .
@@ -206,7 +206,7 @@ gcloud artifacts docker images list "$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO
 
 ### 3-bis.4 Build y push de `inventory-service` y `duel-service`
 
-Estos dos módulos **ya tienen su propio `Dockerfile`** en el repo (`inventory-service/Dockerfile` y `duel-service/Dockerfile`), siguiendo el mismo patrón que `wizard-service/Dockerfile` (ver referencia conceptual en `DOCUMENTACION_BUILD_DEPLOY/08_inventory_service.md` y `DOCUMENTACION_BUILD_DEPLOY/09_duel_service.md`), cambiando solo el módulo del `bootJar` y la ruta del jar copiado en la etapa de runtime.
+Estos dos módulos **ya tienen su propio `Dockerfile`** en el repo (`inventory-service/Dockerfile` y `duel-service/Dockerfile`), siguiendo el mismo patrón que `wizard-service/Dockerfile` (ver referencia conceptual en `BUILD_DEPLOY_DOCS/08_inventory_service.md` y `BUILD_DEPLOY_DOCS/09_duel_service.md`), cambiando solo el módulo del `bootJar` y la ruta del jar copiado en la etapa de runtime.
 
 El build y push es análogo al de `wizard-service`:
 
@@ -258,7 +258,7 @@ Reglas:
 
 - Al incrementar una parte, las de la derecha vuelven a `0`: `1.4.2` → `1.5.0` (MINOR) → `2.0.0` (MAJOR).
 - Mientras un servicio esté en `0.y.z` (desarrollo inicial), su API no se considera estable y un cambio incompatible puede ir en `MINOR`. Pasa a `1.0.0` cuando el contrato se estabiliza, por ejemplo cuando otro servicio o un cliente externo empieza a depender de él.
-- Los servicios se llaman entre sí (ver guía `08_interaccion_entre_microservicios_validacion_ids.md`). Un `MAJOR` en `wizard-service` obliga a revisar a sus consumidores (`inventory-service`, `duel-service`) antes de desplegarlo.
+- Los servicios se llaman entre sí (ver guía `08_microservice_interaction_id_validation.md`). Un `MAJOR` en `wizard-service` obliga a revisar a sus consumidores (`inventory-service`, `duel-service`) antes de desplegarlo.
 
 ### 4.3 Dónde vive la versión: `gradle.properties` de cada servicio
 
@@ -339,7 +339,7 @@ Ejemplo: publicar `wizard-service` `1.4.0`, partiendo de `version=1.4.0-SNAPSHOT
 
 4. **Construir y publicar la imagen** con los tags de la sección 4.7.
 
-5. **Desplegar** la versión nueva en GKE (guía `04_microservicios_gke.md` §9):
+5. **Desplegar** la versión nueva en GKE (guía `04_gke_microservices.md` §9):
 
    ```bash
    kubectl set image deployment/wizard-service wizard-service="$WIZARD_IMAGE:$WIZARD_VERSION"

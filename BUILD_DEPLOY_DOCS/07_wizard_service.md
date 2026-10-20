@@ -57,10 +57,10 @@ tasks.named('test') {
 Puntos clave:
 - **Spring Boot 4.0.1** + **Spring Dependency Management 1.1.7** — a diferencia del `build.gradle` raíz, aquí sí se aplica el plugin de Spring Boot, porque este módulo **es** una aplicación ejecutable (produce un jar arrancable vía la tarea `bootJar`/`bootRun`).
 - **Autocontenido a propósito**: declara las versiones de sus plugins y dependencias y su propio `repositories { mavenCentral() }`, aunque el root ya lo define. Así compila aunque Cloud Build reciba solo esta carpeta (build con Buildpacks). Por la misma razón no usa el catálogo `gradle/libs.versions.toml` del root.
-- **Versión propia** en [`wizard-service/gradle.properties`](../wizard-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): es el nombre del jar y el tag de su imagen, y se incrementa con versionado semántico independiente de los otros servicios (ver [`02_build_gradle_raiz.md`](02_build_gradle_raiz.md#versión-de-cada-servicio) y `DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md` §4).
-- Hereda del bloque `subprojects` del [`build.gradle` raíz](02_build_gradle_raiz.md) el `group` (`com.magic`), el toolchain de Java 17 y Checkstyle/Spotless/JaCoCo (solo en el build desde la raíz, no en el aislado de Buildpacks).
+- **Versión propia** en [`wizard-service/gradle.properties`](../wizard-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): es el nombre del jar y el tag de su imagen, y se incrementa con versionado semántico independiente de los otros servicios (ver [`02_root_build_gradle.md`](02_root_build_gradle.md#versión-de-cada-servicio) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4).
+- Hereda del bloque `subprojects` del [`build.gradle` raíz](02_root_build_gradle.md) el `group` (`com.magic`), el toolchain de Java 17 y Checkstyle/Spotless/JaCoCo (solo en el build desde la raíz, no en el aislado de Buildpacks).
 - `spring-boot-starter-data-jpa` + `h2` (`runtimeOnly`): persistencia con JPA sobre una base H2 (en este módulo, sin configuración explícita de datasource en `application.properties`, por lo que Spring Boot cae al comportamiento por defecto).
-- `postgresql` (`runtimeOnly`) + `postgres-socket-factory` (conector Java de Cloud SQL): se usan con el perfil `gcp`, para conectarse a Cloud SQL en lugar de H2 (ver `DESPLIEGUE_GKE_GCP/06_base_de_datos_cloud_sql.md`).
+- `postgresql` (`runtimeOnly`) + `postgres-socket-factory` (conector Java de Cloud SQL): se usan con el perfil `gcp`, para conectarse a Cloud SQL en lugar de H2 (ver `GKE_GCP_DEPLOYMENT/06_cloud_sql_database.md`).
 - `spring-retry` + `spring-aspects`: soporte de reintentos vía AOP, usado típicamente junto con `@Version` de JPA para manejar `OptimisticLockingFailureException` en operaciones concurrentes (como el ataque entre wizards).
 - No define ninguna tarea de empaquetado de imagen (`bootBuildImage`, `jib`, etc.) — el empaquetado en imagen se hace **fuera** de Gradle, vía el `Dockerfile` de este mismo módulo o vía Buildpacks (ver [`README.md`](README.md)).
 
@@ -68,7 +68,7 @@ Puntos clave:
 
 ```dockerfile
 # Dockerfile educativo — no usado por el flujo de despliegue documentado en
-# DESPLIEGUE_GKE_GCP (que usa Cloud Build + buildpacks). Sirve para comparar
+# GKE_GCP_DEPLOYMENT (que usa Cloud Build + buildpacks). Sirve para comparar
 # manualmente los mismos pasos que un buildpack hace por vos.
 #
 # El build context debe ser la RAIZ del repo (no esta carpeta), porque este
@@ -110,8 +110,8 @@ Es un **Dockerfile multi-stage** (dos `FROM`):
    - `EXPOSE 8080`: coincide con el puerto que el manifiesto `Deployment` de GKE declara (`containerPort: 8080`) y con el que Spring Boot escucha si no se configura otro.
    - `ENTRYPOINT ["java", "-jar", "app.jar"]`: arranque directo del jar.
 
-**Detalle importante remarcado en el propio comentario del archivo**: el **build context debe ser la raíz del repo**, no `wizard-service/` — se invoca como `docker build -f wizard-service/Dockerfile -t wizard-service:local .` (nótese el `.` final apuntando a la raíz). Y el propio archivo se autodescribe como **"educativo"**: sirve para entender/replicar manualmente lo que hace un buildpack, pero **no es** el mecanismo usado en el flujo de despliegue real documentado en `DESPLIEGUE_GKE_GCP/` (que usa Cloud Build + Buildpacks, sin Dockerfile). Ambos flujos se comparan en detalle en [`README.md`](README.md).
+**Detalle importante remarcado en el propio comentario del archivo**: el **build context debe ser la raíz del repo**, no `wizard-service/` — se invoca como `docker build -f wizard-service/Dockerfile -t wizard-service:local .` (nótese el `.` final apuntando a la raíz). Y el propio archivo se autodescribe como **"educativo"**: sirve para entender/replicar manualmente lo que hace un buildpack, pero **no es** el mecanismo usado en el flujo de despliegue real documentado en `GKE_GCP_DEPLOYMENT/` (que usa Cloud Build + Buildpacks, sin Dockerfile). Ambos flujos se comparan en detalle en [`README.md`](README.md).
 
-Para publicar la imagen con su versión semántica como tag (en vez de `wizard-service:local`), ver `DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md` §4.7.
+Para publicar la imagen con su versión semántica como tag (en vez de `wizard-service:local`), ver `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4.7.
 
 Ver también: [`08_inventory_service.md`](08_inventory_service.md) y [`09_duel_service.md`](09_duel_service.md), cuyos `Dockerfile` siguen este mismo patrón.

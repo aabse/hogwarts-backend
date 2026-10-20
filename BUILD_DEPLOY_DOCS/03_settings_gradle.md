@@ -21,7 +21,7 @@ Sin este archivo, `./gradlew :wizard-service:bootJar` (o cualquier tarea con not
 
 ## Relación con el resto del build
 
-- El bloque `subprojects { ... }` de [`build.gradle`](02_build_gradle_raiz.md) (Checkstyle, Spotless, JaCoCo, Java 17) se aplica exactamente a los módulos listados aquí.
+- El bloque `subprojects { ... }` de [`build.gradle`](02_root_build_gradle.md) (Checkstyle, Spotless, JaCoCo, Java 17) se aplica exactamente a los módulos listados aquí.
 - La notación `:modulo:tarea` que aparece en:
   - el [`Dockerfile` de `wizard-service`](07_wizard_service.md) (`./gradlew :wizard-service:bootJar -x test ...`),
   - el [`README.md` raíz](../README.md) para correr cada servicio localmente (`./gradlew :inventory-service:bootRun --args="--server.port=8081"`),
@@ -31,4 +31,4 @@ Sin este archivo, `./gradlew :wizard-service:bootJar` (o cualquier tarea con not
 
 ## Rol en el pipeline de build/deploy
 
-Es un archivo pequeño pero crítico: define qué módulos existen y, por lo tanto, qué imágenes de contenedor son "buildeables" (una por módulo). Tanto el flujo por **Dockerfile** (que necesita copiar `settings.gradle` a la imagen porque compila desde la raíz, ver [`README.md`](README.md)) como el flujo por **Buildpacks** (que se ejecuta desde dentro de cada subcarpeta, ver `DESPLIEGUE_GKE_GCP/03_artifact_registry_y_builds.md`) dependen de esta topología para saber qué compilar de forma aislada.
+Es un archivo pequeño pero crítico: define qué módulos existen y, por lo tanto, qué imágenes de contenedor son "buildeables" (una por módulo). Tanto el flujo por **Dockerfile** (que necesita copiar `settings.gradle` a la imagen porque compila desde la raíz, ver [`README.md`](README.md)) como el flujo por **Buildpacks** (que se ejecuta desde dentro de cada subcarpeta, ver `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) dependen de esta topología para saber qué compilar de forma aislada.
