@@ -1,97 +1,97 @@
-# Qué es una imagen de contenedor y cómo desplegarla en local
+# What a container image is and how to run it locally
 
-Archivos cubiertos:
+Files covered:
 
 - [`wizard-service/Dockerfile`](../wizard-service/Dockerfile)
 
-Este documento complementa [`07_wizard_service.md`](07_wizard_service.md): explica el concepto de "imagen de contenedor" desde cero y detalla, paso a paso, cómo construirla y correrla en la máquina local usando el único `Dockerfile` real del repo. No cubre el flujo de despliegue a GKE (eso está en [`README.md`](README.md#5-fase-de-despliegue-gke) y en [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/)) — aquí el alcance es exclusivamente **local**.
+This document complements [`07_wizard_service.md`](07_wizard_service.md): it explains the concept of a "container image" from scratch and details, step by step, how to build it and run it on the local machine using the `wizard-service` `Dockerfile`. It does not cover the deployment flow to GKE (that is in [`README.md`](README.md#5-deployment-phase-gke) and in [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/)) — here the scope is strictly **local**.
 
-## 1. Qué es una imagen de contenedor
+## 1. What a container image is
 
-Una **imagen** es un paquete inmutable y autocontenido que incluye todo lo necesario para correr una aplicación: código ya compilado, el runtime (en este caso el JRE), librerías y configuración — pero **no** un proceso en ejecución. Se arma en **capas** apiladas (cada instrucción del `Dockerfile` agrega una capa), y esas capas se cachean: si una capa no cambió entre builds, Docker la reutiliza en vez de rehacerla.
+An **image** is an immutable, self-contained package that includes everything needed to run an application: already compiled code, the runtime (in this case the JRE), libraries and configuration — but **not** a running process. It is built in stacked **layers** (each `Dockerfile` instruction adds a layer), and those layers are cached: if a layer did not change between builds, Docker reuses it instead of rebuilding it.
 
-Un **contenedor** es una *instancia en ejecución* de una imagen: el proceso vivo, con su propio filesystem (una capa de escritura sobre la imagen, descartable), su propia red aislada y sus propios recursos. La misma imagen puede levantar múltiples contenedores independientes.
+A **container** is a *running instance* of an image: the live process, with its own filesystem (a disposable writable layer on top of the image), its own isolated network and its own resources. The same image can start multiple independent containers.
 
-Analogía rápida: la imagen es como una clase, el contenedor es como una instancia de esa clase.
+Quick analogy: the image is like a class, the container is like an instance of that class.
 
-| | Imagen | Contenedor |
+| | Image | Container |
 |---|---|---|
-| Naturaleza | Plantilla estática, inmutable | Proceso en ejecución |
-| Se crea con | `docker build` | `docker run` |
-| Cuántos por imagen | — | Muchos, cada uno independiente |
-| Persiste al detenerse | Sí (queda en disco) | Se destruye salvo que se use un volumen |
+| Nature | Static, immutable template | Running process |
+| Created with | `docker build` | `docker run` |
+| How many per image | — | Many, each one independent |
+| Persists when stopped | Yes (stays on disk) | Destroyed unless a volume is used |
 
-## 2. Qué genera el `Dockerfile` de `wizard-service`
+## 2. What the `wizard-service` `Dockerfile` produces
 
-Es un build **multi-stage** (dos `FROM`, ver [`wizard-service/Dockerfile`](../wizard-service/Dockerfile)):
+It is a **multi-stage** build (two `FROM`s, see [`wizard-service/Dockerfile`](../wizard-service/Dockerfile)):
 
-1. **Etapa `build`** (`eclipse-temurin:17-jdk-jammy`): copia el repo completo (necesita el wrapper y los tres módulos porque es un build multi-proyecto Gradle) y corre `./gradlew :wizard-service:bootJar` para generar el jar ejecutable.
-2. **Etapa final** (`eclipse-temurin:17-jre-jammy`): copia **solo** el jar resultante desde la etapa anterior, descartando el JDK, Gradle y el código fuente. El resultado es una imagen final liviana, lista para correr con `java -jar app.jar`.
+1. **`build` stage** (`eclipse-temurin:17-jdk-jammy`): copies the whole repo (it needs the wrapper and the three modules because it is a Gradle multi-project build) and runs `./gradlew :wizard-service:bootJar` to produce the executable jar.
+2. **Final stage** (`eclipse-temurin:17-jre-jammy`): copies **only** the resulting jar from the previous stage, discarding the JDK, Gradle and the source code. The result is a lightweight final image, ready to run with `java -jar app.jar`.
 
-Como se explica en [`07_wizard_service.md`](07_wizard_service.md), este `Dockerfile` es **educativo**: replica manualmente lo que hace Cloud Native Buildpacks (el mecanismo real usado para desplegar a GKE), y `inventory-service` y `duel-service` tienen uno equivalente (ver [`08_inventory_service.md`](08_inventory_service.md) y [`09_duel_service.md`](09_duel_service.md)).
+As explained in [`07_wizard_service.md`](07_wizard_service.md), this `Dockerfile` is **educational**: it manually replicates what Cloud Native Buildpacks does (the actual mechanism used to deploy to GKE), and `inventory-service` and `duel-service` have an equivalent one (see [`08_inventory_service.md`](08_inventory_service.md) and [`09_duel_service.md`](09_duel_service.md)).
 
-## 3. Paso a paso: construir y correr la imagen en local
+## 3. Step by step: build and run the image locally
 
-### 3.1. Construir la imagen (`docker build`)
+### 3.1. Build the image (`docker build`)
 
 ```bash
 docker build -f wizard-service/Dockerfile -t wizard-service:local .
 ```
 
-- `-f wizard-service/Dockerfile`: indica **qué** Dockerfile usar (no está en la raíz).
-- `-t wizard-service:local`: le pone nombre (`wizard-service`) y etiqueta (`local`) a la imagen resultante, para poder referenciarla después.
-- **El `.` final es el build context, y debe ser la raíz del repo** — no `wizard-service/`. El propio `Dockerfile` lo remarca en su comentario inicial: como es un proyecto Gradle multi-módulo, la etapa `build` necesita ver `gradlew`, `settings.gradle` y las tres carpetas de servicios, todo lo cual cuelga de la raíz.
+- `-f wizard-service/Dockerfile`: tells Docker **which** Dockerfile to use (it is not at the root).
+- `-t wizard-service:local`: gives the resulting image a name (`wizard-service`) and a tag (`local`), so it can be referenced later.
+- **The final `.` is the build context, and it must be the repo root** — not `wizard-service/`. The `Dockerfile` itself points this out in its opening comment: since it is a Gradle multi-module project, the `build` stage needs to see `gradlew`, `settings.gradle` and the three service folders, all of which hang off the root.
 
-Qué pasa internamente al correr esto: Docker arma la etapa `build` en un contenedor temporal (compila con Gradle dentro), después arma la etapa final copiando solo el jar, y descarta el contenedor temporal de la primera etapa. Al terminar, la imagen `wizard-service:local` queda guardada en el almacenamiento local de Docker (visible con `docker images`).
+What happens internally when you run this: Docker builds the `build` stage in a temporary container (compiling with Gradle inside), then builds the final stage by copying only the jar, and discards the temporary container from the first stage. When it finishes, the `wizard-service:local` image is stored in Docker's local storage (visible with `docker images`).
 
-### 3.2. Correr un contenedor a partir de la imagen (`docker run`)
+### 3.2. Run a container from the image (`docker run`)
 
 ```bash
 docker run -p 8080:8080 wizard-service:local
 ```
 
-- `-p 8080:8080`: publica el puerto 8080 del contenedor (el que el `Dockerfile` declara con `EXPOSE 8080` y en el que Spring Boot escucha por defecto) en el puerto 8080 del host. Formato: `-p <puerto_host>:<puerto_contenedor>`.
-- `wizard-service:local`: la imagen construida en el paso anterior.
+- `-p 8080:8080`: publishes the container's port 8080 (the one the `Dockerfile` declares with `EXPOSE 8080` and that Spring Boot listens on by default) on the host's port 8080. Format: `-p <host_port>:<container_port>`.
+- `wizard-service:local`: the image built in the previous step.
 
-El contenedor arranca `ENTRYPOINT ["java", "-jar", "app.jar"]`, levanta el contexto de Spring Boot con su base H2 en memoria (igual que corriendo `bootRun` en local, ver [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md)), y queda escuchando en `localhost:8080`.
+The container runs `ENTRYPOINT ["java", "-jar", "app.jar"]`, brings up the Spring Boot context with its in-memory H2 database (just like running `bootRun` locally, see [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md)), and listens on `localhost:8080`.
 
-### 3.3. Verificar que responde
+### 3.3. Check that it responds
 
-Con el contenedor corriendo (en otra terminal):
+With the container running (in another terminal):
 
 ```bash
 curl http://localhost:8080/api/wizards
 ```
 
-O usando la colección Postman del repo (`Hogwarts_API.postman_collection.json`) apuntando a `localhost:8080`.
+Or use the repo's Postman collection (`Hogwarts_API.postman_collection.json`) pointing to `localhost:8080`.
 
-### 3.4. Detener y limpiar
+### 3.4. Stop and clean up
 
 ```bash
-# Ctrl+C si corriste docker run en foreground, o:
-docker ps                     # ver el ID/nombre del contenedor
-docker stop <container_id>    # detenerlo
+# Ctrl+C if you ran docker run in the foreground, or:
+docker ps                     # see the container ID/name
+docker stop <container_id>    # stop it
 
-docker rmi wizard-service:local   # borrar la imagen si ya no se necesita
+docker rmi wizard-service:local   # delete the image if it is no longer needed
 ```
 
-## 4. Diagrama del flujo local
+## 4. Local flow diagram
 
 ```mermaid
 flowchart TD
-    A["wizard-service/Dockerfile"] --> B["docker build -f wizard-service/Dockerfile -t wizard-service:local .<br/>(context = raíz del repo)"]
-    B --> C["Etapa 1 (jdk-jammy):<br/>./gradlew :wizard-service:bootJar"]
-    C --> D["Etapa 2 (jre-jammy):<br/>copia solo el jar generado"]
-    D --> E["Imagen wizard-service:local<br/>(en el almacenamiento local de Docker)"]
+    A["wizard-service/Dockerfile"] --> B["docker build -f wizard-service/Dockerfile -t wizard-service:local .<br/>(context = repo root)"]
+    B --> C["Stage 1 (jdk-jammy):<br/>./gradlew :wizard-service:bootJar"]
+    C --> D["Stage 2 (jre-jammy):<br/>copies only the generated jar"]
+    D --> E["wizard-service:local image<br/>(in Docker's local storage)"]
     E --> F["docker run -p 8080:8080 wizard-service:local"]
-    F --> G["Contenedor en ejecución<br/>ENTRYPOINT: java -jar app.jar"]
-    G --> H["App accesible en localhost:8080<br/>(H2 en memoria, igual que bootRun)"]
+    F --> G["Running container<br/>ENTRYPOINT: java -jar app.jar"]
+    G --> H["App reachable at localhost:8080<br/>(in-memory H2, same as bootRun)"]
 ```
 
-## 5. Notas
+## 5. Notes
 
-- Este flujo es **puramente local**: no publica la imagen en ningún registry ni la conecta con GCP. Para eso está la sección 4.a del [`README.md`](README.md#4-fase-de-empaquetado-dos-procesos-separados) (Cloud Native Buildpacks + Artifact Registry), que es el mecanismo real usado para desplegar.
-- `inventory-service` y `duel-service` usan el mismo camino (mismo `docker build`/`docker run`, cambiando el nombre del módulo y el `-f`), con sus propios `Dockerfile` — ver [`08_inventory_service.md`](08_inventory_service.md) y [`09_duel_service.md`](09_duel_service.md).
-- El tag `:local` es solo para pruebas en tu máquina. Para publicar en Artifact Registry, el tag es la versión semántica del servicio (de su `gradle.properties`), ver `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4.
+- This flow is **purely local**: it does not publish the image to any registry or connect it to GCP. That is what section 4.a of [`README.md`](README.md#4-packaging-phase-two-separate-processes) covers (Cloud Native Buildpacks + Artifact Registry), which is the actual mechanism used to deploy.
+- `inventory-service` and `duel-service` follow the same path (same `docker build`/`docker run`, changing the module name and the `-f`), with their own `Dockerfile`s — see [`08_inventory_service.md`](08_inventory_service.md) and [`09_duel_service.md`](09_duel_service.md).
+- The `:local` tag is only for testing on your machine. To publish to Artifact Registry, the tag is the service's semantic version (from its `gradle.properties`), see `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4.
 
-Ver también: [`07_wizard_service.md`](07_wizard_service.md), [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md).
+See also: [`07_wizard_service.md`](07_wizard_service.md), [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md).

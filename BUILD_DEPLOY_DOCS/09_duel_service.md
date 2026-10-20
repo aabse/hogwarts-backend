@@ -1,12 +1,12 @@
-# `duel-service`: `build.gradle` y `Dockerfile`
+# `duel-service`: `build.gradle` and `Dockerfile`
 
-Archivos cubiertos:
+Files covered:
 
 - [`duel-service/build.gradle`](../duel-service/build.gradle)
 - [`duel-service/gradle.properties`](../duel-service/gradle.properties)
 - [`duel-service/Dockerfile`](../duel-service/Dockerfile)
 
-**Función del servicio**: gestiona duelos entre wizards — creación de un duelo y consulta de su estado/resultado (`POST /api/duels`, `GET /api/duels/{id}`), con un modelo de dominio `Duel` + `DuelStatus`.
+**What the service does**: it manages duels between wizards — creating a duel and querying its status/result (`POST /api/duels`, `GET /api/duels/{id}`), with a `Duel` + `DuelStatus` domain model.
 
 ## `build.gradle`
 
@@ -17,8 +17,8 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
-// Se repite aqui (aunque el root ya lo define) para que el modulo compile aislado:
-// el build con buildpacks sube solo esta carpeta a Cloud Build.
+// Repeated here (even though the root defines it) so the module builds in isolation:
+// the buildpacks build uploads only this folder to Cloud Build.
 repositories {
     mavenCentral()
 }
@@ -37,7 +37,7 @@ dependencies {
 
     runtimeOnly 'com.h2database:h2'
 
-    // Cloud SQL Java Connector (perfil "gcp")
+    // Cloud SQL Java Connector ("gcp" profile)
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'com.google.cloud.sql:postgres-socket-factory:1.28.1'
 
@@ -52,27 +52,27 @@ tasks.named('test') {
 }
 ```
 
-Es **idéntico** al de [`wizard-service`](07_wizard_service.md) dependencia por dependencia, incluyendo `spring-retry` + `spring-aspects` (coherente con que la creación/actualización de un duelo probablemente involucra bloqueo optimista sobre los wizards participantes, igual que la operación de ataque) y PostgreSQL + conector de Cloud SQL para el perfil `gcp`. Como los otros módulos:
+It is **identical** to [`wizard-service`](07_wizard_service.md)'s, dependency by dependency, including `spring-retry` + `spring-aspects` (consistent with the fact that creating/updating a duel probably involves optimistic locking on the participating wizards, just like the attack operation) and PostgreSQL + the Cloud SQL connector for the `gcp` profile. Like the other modules:
 
-- **Autocontenido a propósito**: declara las versiones de sus plugins y dependencias y su propio `repositories { mavenCentral() }`, aunque el root ya lo define. Así compila aunque Cloud Build reciba solo esta carpeta (build con Buildpacks). Por la misma razón no usa el catálogo `gradle/libs.versions.toml` del root.
-- **Versión propia** en [`duel-service/gradle.properties`](../duel-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): es el nombre del jar y el tag de su imagen, y se incrementa con versionado semántico independiente de los otros servicios (ver [`02_root_build_gradle.md`](02_root_build_gradle.md#versión-de-cada-servicio) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4).
-- Hereda del [`build.gradle` raíz](02_root_build_gradle.md) el `group`, el toolchain de Java 17 y la configuración de Checkstyle/Spotless/JaCoCo.
+- **Self-contained on purpose**: it declares the versions of its plugins and dependencies and its own `repositories { mavenCentral() }`, even though the root already defines it. That way it compiles even when Cloud Build receives only this folder (Buildpacks build). For the same reason it does not use the root's `gradle/libs.versions.toml` catalog.
+- **Its own version** in [`duel-service/gradle.properties`](../duel-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): it is the jar name and its image tag, and it is incremented with semantic versioning independently of the other services (see [`02_root_build_gradle.md`](02_root_build_gradle.md#version-of-each-service) and `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4).
+- It inherits from the [root `build.gradle`](02_root_build_gradle.md) the `group`, the Java 17 toolchain and the Checkstyle/Spotless/JaCoCo configuration.
 
 ## `Dockerfile`
 
 ```dockerfile
-# Dockerfile educativo — no usado por el flujo de despliegue documentado en
-# GKE_GCP_DEPLOYMENT (que usa Cloud Build + buildpacks). Sirve para comparar
-# manualmente los mismos pasos que un buildpack hace por vos.
+# Educational Dockerfile — not used by the deployment flow documented in
+# GKE_GCP_DEPLOYMENT (which uses Cloud Build + buildpacks). It lets you compare,
+# step by step, what a buildpack does for you.
 #
-# El build context debe ser la RAIZ del repo (no esta carpeta), porque este
-# modulo es parte de un build multi-proyecto Gradle y necesita el wrapper y
-# el settings.gradle de la raiz:
+# The build context must be the repo ROOT (not this folder), because this
+# module is part of a Gradle multi-project build and needs the root wrapper
+# and settings.gradle:
 #
 #   docker build -f duel-service/Dockerfile -t duel-service:local .
 #   docker run -p 8080:8080 duel-service:local
 
-# --- Etapa 1: compilar el jar con Gradle ---
+# --- Stage 1: build the jar with Gradle ---
 FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /workspace
 
@@ -86,7 +86,7 @@ COPY duel-service duel-service
 RUN chmod +x gradlew
 RUN ./gradlew :duel-service:bootJar -x test -x checkstyleMain -x checkstyleTest -x spotlessCheck --no-daemon
 
-# --- Etapa 2: imagen de runtime, liviana (solo JRE) ---
+# --- Stage 2: lightweight runtime image (JRE only) ---
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY --from=build /workspace/duel-service/build/libs/*.jar app.jar
@@ -94,10 +94,10 @@ EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
-Sigue el mismo patrón multi-stage que [`wizard-service/Dockerfile`](07_wizard_service.md#dockerfile) (explicado en detalle ahí), cambiando solo el módulo objetivo (`:duel-service:bootJar`) y la ruta del jar (`duel-service/build/libs/*.jar`):
+It follows the same multi-stage pattern as [`wizard-service/Dockerfile`](07_wizard_service.md#dockerfile) (explained in detail there), changing only the target module (`:duel-service:bootJar`) and the jar path (`duel-service/build/libs/*.jar`):
 
 ```bash
 docker build -f duel-service/Dockerfile -t duel-service:local .
 ```
 
-Es **educativo**, como los otros dos. El flujo de despliegue documentado (GKE + Buildpacks, ver [`README.md`](README.md) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) construye la imagen con `gcloud builds submit --pack` ejecutado desde `duel-service/`, usando como tag la versión de `duel-service/gradle.properties` (guía 03 §4.7).
+It is **educational**, like the other two. The documented deployment flow (GKE + Buildpacks, see [`README.md`](README.md) and `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) builds the image with `gcloud builds submit --pack` run from `duel-service/`, using the version from `duel-service/gradle.properties` as the tag (guide 03 §4.7).

@@ -1,6 +1,6 @@
 # `settings.gradle`
 
-Archivo cubierto: [`settings.gradle`](../settings.gradle)
+File covered: [`settings.gradle`](../settings.gradle)
 
 ```groovy
 rootProject.name = 'hogwarts-backend'
@@ -10,25 +10,25 @@ include 'inventory-service'
 include 'duel-service'
 ```
 
-## Qué hace
+## What it does
 
-`settings.gradle` es el **punto de entrada** de un build de Gradle: se evalúa antes que cualquier `build.gradle`, y es donde se define la topología del proyecto multi-módulo.
+`settings.gradle` is the **entry point** of a Gradle build: it is evaluated before any `build.gradle`, and it is where the topology of the multi-module project is defined.
 
-- `rootProject.name = 'hogwarts-backend'`: nombre lógico del proyecto raíz (usado, por ejemplo, en el nombre del artefacto si se empaquetara la raíz, y en mensajes de Gradle).
-- `include 'wizard-service' / 'inventory-service' / 'duel-service'`: declara los tres subproyectos. Cada `include` le dice a Gradle que busque una carpeta con ese nombre en la raíz y que espere encontrar allí un `build.gradle` propio (ver [`07_wizard_service.md`](07_wizard_service.md), [`08_inventory_service.md`](08_inventory_service.md), [`09_duel_service.md`](09_duel_service.md)).
+- `rootProject.name = 'hogwarts-backend'`: the logical name of the root project (used, for example, in the artifact name if the root were packaged, and in Gradle messages).
+- `include 'wizard-service' / 'inventory-service' / 'duel-service'`: declares the three subprojects. Each `include` tells Gradle to look for a folder with that name at the root and to expect its own `build.gradle` there (see [`07_wizard_service.md`](07_wizard_service.md), [`08_inventory_service.md`](08_inventory_service.md), [`09_duel_service.md`](09_duel_service.md)).
 
-Sin este archivo, `./gradlew :wizard-service:bootJar` (o cualquier tarea con notación de proyecto, `:modulo:tarea`) no existiría — Gradle no sabría que `wizard-service` es un módulo del build.
+Without this file, `./gradlew :wizard-service:bootJar` (or any task using project notation, `:module:task`) would not exist — Gradle would not know that `wizard-service` is a module of the build.
 
-## Relación con el resto del build
+## Relationship with the rest of the build
 
-- El bloque `subprojects { ... }` de [`build.gradle`](02_root_build_gradle.md) (Checkstyle, Spotless, JaCoCo, Java 17) se aplica exactamente a los módulos listados aquí.
-- La notación `:modulo:tarea` que aparece en:
-  - el [`Dockerfile` de `wizard-service`](07_wizard_service.md) (`./gradlew :wizard-service:bootJar -x test ...`),
-  - el [`README.md` raíz](../README.md) para correr cada servicio localmente (`./gradlew :inventory-service:bootRun --args="--server.port=8081"`),
-  
-  solo funciona porque `settings.gradle` incluyó esos módulos.
-- Si en el futuro se agregara un cuarto microservicio, el primer paso sería añadir su `include` aquí.
+- The `subprojects { ... }` block of [`build.gradle`](02_root_build_gradle.md) (Checkstyle, Spotless, JaCoCo, Java 17) is applied exactly to the modules listed here.
+- The `:module:task` notation that appears in:
+  - the [`wizard-service` `Dockerfile`](07_wizard_service.md) (`./gradlew :wizard-service:bootJar -x test ...`),
+  - the [root `README.md`](../README.md) to run each service locally (`./gradlew :inventory-service:bootRun --args="--server.port=8081"`),
 
-## Rol en el pipeline de build/deploy
+  only works because `settings.gradle` included those modules.
+- If a fourth microservice were added in the future, the first step would be to add its `include` here.
 
-Es un archivo pequeño pero crítico: define qué módulos existen y, por lo tanto, qué imágenes de contenedor son "buildeables" (una por módulo). Tanto el flujo por **Dockerfile** (que necesita copiar `settings.gradle` a la imagen porque compila desde la raíz, ver [`README.md`](README.md)) como el flujo por **Buildpacks** (que se ejecuta desde dentro de cada subcarpeta, ver `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) dependen de esta topología para saber qué compilar de forma aislada.
+## Role in the build/deploy pipeline
+
+It is a small but critical file: it defines which modules exist and therefore which container images are "buildable" (one per module). Both the **Dockerfile** flow (which needs to copy `settings.gradle` into the image because it compiles from the root, see [`README.md`](README.md)) and the **Buildpacks** flow (which runs from inside each subfolder, see `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) depend on this topology to know what to compile in isolation.

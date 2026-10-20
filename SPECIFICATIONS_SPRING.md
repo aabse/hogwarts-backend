@@ -1,35 +1,35 @@
-## ¿Qué son las `Specifications` en Spring (Spring Data JPA)?
+## What are `Specifications` in Spring (Spring Data JPA)?
 
-En **Spring Data JPA**, una *Specification* es una forma **componible** de construir criterios de búsqueda dinámicos usando el **Criteria API** de JPA, sin escribir SQL/HQL “a mano”.
+In **Spring Data JPA**, a *Specification* is a **composable** way to build dynamic search criteria using the JPA **Criteria API**, without writing SQL/HQL "by hand".
 
-En términos prácticos:
+In practical terms:
 
-- Una `Specification<T>` representa “una condición” (un `WHERE`) para filtrar entidades `T`.
-- Se puede **combinar** con otras specifications usando `.and(...)` y `.or(...)`.
-- Se ejecuta a través de un repositorio que implemente `JpaSpecificationExecutor<T>`, por ejemplo:
+- A `Specification<T>` represents "a condition" (a `WHERE`) to filter `T` entities.
+- It can be **combined** with other specifications using `.and(...)` and `.or(...)`.
+- It is executed through a repository that implements `JpaSpecificationExecutor<T>`, for example:
   - `findAll(spec, pageable)`
   - `findAll(spec)`
 
-Esto permite armar filtros opcionales según lo que el cliente envíe como parámetros en la request.
+This lets you build optional filters depending on what the client sends as request parameters.
 
 ---
 
-## ¿Cómo funciona por debajo (idea general)?
+## How does it work underneath (general idea)?
 
-Una `Specification` se traduce a un `Predicate` del Criteria API:
+A `Specification` is translated into a Criteria API `Predicate`:
 
 - **Entity**: `Wizard`
-- **Root**: representa la tabla/entidad
-- **CriteriaBuilder**: utilidades para construir comparaciones (`equal`, `like`, `lower`, etc.)
-- **Predicate**: condición final que se aplica como `WHERE`
+- **Root**: represents the table/entity
+- **CriteriaBuilder**: utilities to build comparisons (`equal`, `like`, `lower`, etc.)
+- **Predicate**: the final condition applied as the `WHERE`
 
 ---
 
-## ¿Cómo se usan hasta el momento en este proyecto?
+## How are they used so far in this project?
 
-### 1) `WizardRepository` habilita Specifications
+### 1) `WizardRepository` enables Specifications
 
-El repositorio implementa `JpaSpecificationExecutor<Wizard>`, lo que habilita `findAll(Specification, Pageable)`:
+The repository implements `JpaSpecificationExecutor<Wizard>`, which enables `findAll(Specification, Pageable)`:
 
 ```10:15:wizard-service/src/main/java/com/magic/hogwarts/wizard/infrastructure/persistence/WizardRepository.java
 public interface WizardRepository extends JpaRepository<Wizard, Long>, JpaSpecificationExecutor<Wizard> {
@@ -40,9 +40,9 @@ public interface WizardRepository extends JpaRepository<Wizard, Long>, JpaSpecif
 }
 ```
 
-### 2) `WizardSpecifications` concentra filtros reutilizables
+### 2) `WizardSpecifications` groups reusable filters
 
-Actualmente hay 2 filtros:
+There are currently 2 filters:
 
 - **house equals (case-insensitive)**
 - **name contains (case-insensitive)**
@@ -64,99 +64,98 @@ public final class WizardSpecifications {
 }
 ```
 
-#### Explicación detallada de cada línea (51–64)
+#### Line-by-line explanation (51–64)
 
 - **L51: `public final class WizardSpecifications {`**
-  - Declara una **clase pública** llamada `WizardSpecifications`, accesible desde cualquier paquete del proyecto.
-  - El modificador **`final`** indica que **no puede heredarse** (nadie puede crear `class X extends WizardSpecifications`).
-  - Este patrón se usa típicamente para **clases utilitarias**: agrupan métodos `static` (en este caso, factories de `Specification<Wizard>`) y no representan un “objeto” con estado.
-  - La llave `{` abre el bloque de la clase donde se definen sus miembros (métodos, constantes, etc.).
+  - Declares a **public class** named `WizardSpecifications`, accessible from any package in the project.
+  - The **`final`** modifier means it **cannot be subclassed** (nobody can write `class X extends WizardSpecifications`).
+  - This pattern is typically used for **utility classes**: they group `static` methods (in this case, `Specification<Wizard>` factories) and do not represent an "object" with state.
+  - The `{` brace opens the class block where its members (methods, constants, etc.) are defined.
 
 - **L52: `private WizardSpecifications() {}`**
-  - Define un **constructor** con el mismo nombre de la clase. En Java, el constructor es el mecanismo para crear instancias con `new`.
-  - Al ser **`private`**, **impide** que otros (o el mismo paquete) puedan hacer `new WizardSpecifications()`.
-  - El cuerpo `{}` está vacío porque **no hay inicialización que realizar**: la clase no está pensada para instanciarse.
-  - En combinación con `final`, refuerza la intención: `WizardSpecifications` es un **contenedor de utilidades estáticas** (las specifications) y no una clase destinada a ser extendida o instanciada.
+  - Defines a **constructor** with the same name as the class. In Java, the constructor is the mechanism for creating instances with `new`.
+  - Being **`private`**, it **prevents** others (or the same package) from calling `new WizardSpecifications()`.
+  - The body `{}` is empty because **there is no initialization to do**: the class is not meant to be instantiated.
+  - Combined with `final`, it reinforces the intent: `WizardSpecifications` is a **container of static utilities** (the specifications), not a class meant to be extended or instantiated.
 
-- **L53: (línea en blanco)**
-  - Separa visualmente el constructor de los métodos `static` para mejorar legibilidad. No tiene efecto en compilación.
+- **L53: (blank line)**
+  - Visually separates the constructor from the `static` methods to improve readability. It has no effect on compilation.
 
 - **L54: `public static Specification<Wizard> houseEqualsIgnoreCase(String house) {`**
-  - Declara un método **público** (usable desde fuera), **estático** (se llama como `WizardSpecifications.houseEqualsIgnoreCase(...)` sin instanciar la clase).
-  - El tipo de retorno es `Specification<Wizard>`: el método **construye y devuelve** una condición reutilizable para filtrar entidades `Wizard`.
-  - Recibe `String house` como valor a comparar contra el campo `house` de la entidad.
-  - La llave `{` abre el cuerpo del método.
+  - Declares a **public** (usable from outside), **static** method (called as `WizardSpecifications.houseEqualsIgnoreCase(...)` without instantiating the class).
+  - The return type is `Specification<Wizard>`: the method **builds and returns** a reusable condition to filter `Wizard` entities.
+  - It receives `String house` as the value to compare against the entity's `house` field.
+  - The `{` brace opens the method body.
 
 - **L55: `return (root, query, cb) ->`**
-  - Devuelve una **lambda** que implementa `Specification<Wizard>` (en esencia, la función `toPredicate(root, query, cb)`).
-  - Parámetros típicos del Criteria API:
-    - `root`: representa la entidad/tabla (`Wizard`) y permite acceder a sus atributos con `root.get("campo")`.
-    - `query`: representa la consulta JPA que se está construyendo (aquí no se modifica, solo se recibe).
-    - `cb` (*CriteriaBuilder*): “fábrica” de expresiones y predicados (`equal`, `like`, `lower`, etc.).
-  - El `->` indica que la lambda devolverá un `Predicate` (la condición del `WHERE`).
+  - Returns a **lambda** that implements `Specification<Wizard>` (essentially, the `toPredicate(root, query, cb)` function).
+  - Typical Criteria API parameters:
+    - `root`: represents the entity/table (`Wizard`) and gives access to its attributes with `root.get("field")`.
+    - `query`: represents the JPA query being built (it is not modified here, only received).
+    - `cb` (*CriteriaBuilder*): a "factory" of expressions and predicates (`equal`, `like`, `lower`, etc.).
+  - The `->` indicates that the lambda will return a `Predicate` (the `WHERE` condition).
 
 - **L56: `cb.equal(cb.lower(root.get("house")), house.toLowerCase());`**
-  - Construye un `Predicate` de igualdad usando `cb.equal(...)`.
-  - `root.get("house")` accede al atributo `house` de `Wizard` (debe coincidir con el nombre del campo/propiedad mapeada).
-  - `cb.lower(...)` fuerza a minúsculas el valor del campo **en base de datos** para hacer comparación **case-insensitive**.
-  - `house.toLowerCase()` convierte el input del usuario a minúsculas para compararlo en el mismo “formato”.
-  - Resultado: condición equivalente a \(LOWER(house) = lower(input)\).
+  - Builds an equality `Predicate` using `cb.equal(...)`.
+  - `root.get("house")` accesses the `house` attribute of `Wizard` (it must match the name of the mapped field/property).
+  - `cb.lower(...)` lowercases the field's value **in the database** to make the comparison **case-insensitive**.
+  - `house.toLowerCase()` lowercases the user's input so both sides are compared in the same "format".
+  - Result: a condition equivalent to \(LOWER(house) = lower(input)\).
 
 - **L57: `}`**
-  - Cierra el método `houseEqualsIgnoreCase`.
+  - Closes the `houseEqualsIgnoreCase` method.
 
-- **L58: (línea en blanco)**
-  - Separación visual entre ambos métodos de specification.
+- **L58: (blank line)**
+  - Visual separation between the two specification methods.
 
 - **L59: `public static Specification<Wizard> nameContainsIgnoreCase(String name) {`**
-  - Declara otro método **público y estático** que devuelve una `Specification<Wizard>`.
-  - Se usará para filtrar por el campo `name` de `Wizard` usando una búsqueda “contiene” (*contains*) sin distinguir mayúsculas/minúsculas.
+  - Declares another **public static** method that returns a `Specification<Wizard>`.
+  - It is used to filter by the `Wizard`'s `name` field with a case-insensitive "contains" search.
 
 - **L60: `String like = "%" + name.toLowerCase() + "%";`**
-  - Prepara el patrón para un `LIKE` SQL:
-    - `%` significa “cualquier secuencia de caracteres” (comodín).
-  - Al envolver el texto con `%...%`, la búsqueda equivale a “**contiene**”.
-  - `name.toLowerCase()` normaliza el input a minúsculas para comparación case-insensitive.
+  - Prepares the pattern for an SQL `LIKE`:
+    - `%` means "any sequence of characters" (wildcard).
+  - Wrapping the text in `%...%` makes the search equivalent to "**contains**".
+  - `name.toLowerCase()` normalizes the input to lowercase for a case-insensitive comparison.
 
 - **L61: `return (root, query, cb) ->`**
-  - Devuelve una lambda `Specification` igual que en L55, usando `root`, `query` y `cb` para construir el `Predicate`.
+  - Returns a `Specification` lambda just like in L55, using `root`, `query` and `cb` to build the `Predicate`.
 
 - **L62: `cb.like(cb.lower(root.get("name")), like);`**
-  - Construye un `Predicate` con `cb.like(...)` (coincidencia por patrón).
-  - `root.get("name")` accede al atributo `name` de la entidad.
-  - `cb.lower(...)` baja a minúsculas el valor del campo en la BD para comparación sin caso.
-  - `like` es el patrón `%<texto>%` en minúsculas.
-  - Resultado: condición equivalente a \(LOWER(name) LIKE '%texto%'\).
+  - Builds a `Predicate` with `cb.like(...)` (pattern matching).
+  - `root.get("name")` accesses the entity's `name` attribute.
+  - `cb.lower(...)` lowercases the field's value in the DB for a case-insensitive comparison.
+  - `like` is the lowercase `%<text>%` pattern.
+  - Result: a condition equivalent to \(LOWER(name) LIKE '%text%'\).
 
 - **L63: `}`**
-  - Cierra el método `nameContainsIgnoreCase`.
+  - Closes the `nameContainsIgnoreCase` method.
 
 - **L64: `}`**
-  - Cierra la clase `WizardSpecifications`.
+  - Closes the `WizardSpecifications` class.
 
-### 3) `WizardService.list(...)` arma el filtro dinámicamente
+### 3) `WizardService.list(...)` builds the filter dynamically
 
-El endpoint `GET /api/wizards` permite `house` y `name` como filtros opcionales. El servicio decide:
+The `GET /api/wizards` endpoint accepts `house` and `name` as optional filters. The service decides:
 
-- Si **no** hay filtros → se usa `repository.findAll(pageable)` (sin specification).
-- Si hay filtros → se arma `spec` y se usa `repository.findAll(spec, pageable)`.
+- If there are **no** filters → it uses `repository.findAll(pageable)` (no specification).
+- If there are filters → it builds `spec` and uses `repository.findAll(spec, pageable)`.
 
-Esto evita un problema común: **pasar `null` como `Specification` a `findAll(spec, pageable)`**, lo que puede lanzar `IllegalArgumentException` con mensajes como `"Specification must not be null"`.
-
----
-
-## Ventajas de usar Specifications
-
-- **Filtros dinámicos** sin ifs complejos ni concatenación de strings.
-- **Composición**: podés combinar condiciones de forma declarativa.
-- **Reutilización**: las specs viven en una clase tipo `*Specifications` y se usan desde servicios.
-- **Paginación**: funciona muy bien con `Pageable`.
+This avoids a common problem: **passing `null` as the `Specification` to `findAll(spec, pageable)`**, which can throw an `IllegalArgumentException` with messages like `"Specification must not be null"`.
 
 ---
 
-## Recomendaciones para seguir escalando
+## Advantages of using Specifications
 
-- **Agregar más specifications** por campo (por ejemplo, `level >=`, `level <=`, `house in`, etc.).
-- Para muchos filtros, considerar un DTO de filtros (por ej. `WizardFilter`) y construir la spec desde ahí.
-- Evitar bajar `toLowerCase()` sin controlar `Locale` si se vuelve crítico (en general está OK para este caso).
+- **Dynamic filters** without complex ifs or string concatenation.
+- **Composition**: you can combine conditions declaratively.
+- **Reuse**: the specs live in a `*Specifications`-style class and are used from the services.
+- **Pagination**: it works very well with `Pageable`.
 
+---
+
+## Recommendations for further scaling
+
+- **Add more specifications** per field (for example `level >=`, `level <=`, `house in`, etc.).
+- For many filters, consider a filter DTO (e.g. `WizardFilter`) and build the spec from it.
+- Avoid calling `toLowerCase()` without controlling the `Locale` if it becomes critical (in general it is fine for this case).

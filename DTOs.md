@@ -1,48 +1,48 @@
-# DTOs (Data Transfer Objects) en este proyecto
+# DTOs (Data Transfer Objects) in this project
 
-## ¿Qué es un DTO?
+## What is a DTO?
 
-Un **DTO (Data Transfer Object)** es un objeto simple cuyo propósito es **transportar datos** entre capas (normalmente entre la API y la lógica de negocio) sin exponer directamente:
+A **DTO (Data Transfer Object)** is a simple object whose purpose is to **carry data** between layers (usually between the API and the business logic) without directly exposing:
 
-- Las **entidades del dominio** (modelos JPA, estado interno, relaciones, etc.).
-- Detalles de persistencia o implementación.
-- Campos que no deberían viajar por la red (por seguridad, acoplamiento o estabilidad del contrato).
+- The **domain entities** (JPA models, internal state, relationships, etc.).
+- Persistence or implementation details.
+- Fields that should not travel over the network (for security, coupling or contract stability reasons).
 
-Un DTO suele ser una clase “plana” (con campos + getters/setters) y se usa para definir el **contrato de entrada/salida** de los endpoints.
+A DTO is usually a "flat" class (fields + getters/setters) and is used to define the **input/output contract** of the endpoints.
 
 ---
 
-## ¿Cómo se usan los DTO en este proyecto?
+## How are DTOs used in this project?
 
-Este repositorio tiene 3 microservicios Gradle (multi-módulo):
+This repository has 3 Gradle microservices (multi-module):
 
 - `wizard-service`
 - `inventory-service`
 - `duel-service`
 
-En los 3 se sigue el mismo patrón:
+All 3 follow the same pattern:
 
-- **DTOs de request**: en `.../api/dto/request`
-- **DTOs de response**: en `.../api/dto/response`
+- **Request DTOs**: in `.../api/dto/request`
+- **Response DTOs**: in `.../api/dto/response`
 
-Los **Controllers** reciben/envían DTOs, y los **Services** hacen el mapeo entre DTO ↔ modelo de dominio.
+The **Controllers** receive/send DTOs, and the **Services** do the mapping between DTO ↔ domain model.
 
-### Flujo típico
+### Typical flow
 
 1. **Controller**
-   - Recibe JSON en un DTO de request con `@RequestBody`.
-   - Valida el payload con `@Valid` (Jakarta Bean Validation).
-2. **Service (capa de aplicación)**
-   - Convierte el DTO de request a un modelo de dominio (por ejemplo `Wizard`, `Wand`, `Duel`).
-   - Ejecuta reglas de negocio.
-   - Persiste/consulta mediante el repositorio.
-   - Convierte el modelo de dominio a un DTO de response (por ejemplo con un método `toDTO(...)`).
+   - Receives JSON into a request DTO with `@RequestBody`.
+   - Validates the payload with `@Valid` (Jakarta Bean Validation).
+2. **Service (application layer)**
+   - Converts the request DTO into a domain model (for example `Wizard`, `Wand`, `Duel`).
+   - Runs the business rules.
+   - Persists/queries through the repository.
+   - Converts the domain model into a response DTO (for example with a `toDTO(...)` method).
 3. **Controller**
-   - Devuelve el DTO de response como JSON.
+   - Returns the response DTO as JSON.
 
 ---
 
-## Estructura y ejemplos por microservicio
+## Structure and examples per microservice
 
 ### 1) `wizard-service`
 
@@ -56,21 +56,21 @@ Los **Controllers** reciben/envían DTOs, y los **Services** hacen el mapeo ent
   - `wizard-service/src/main/java/com/magic/hogwarts/wizard/api/dto/response/WizardDTO.java`
   - `wizard-service/src/main/java/com/magic/hogwarts/wizard/api/dto/response/AttackResultDTO.java`
 
-**Cómo se usan**
+**How they are used**
 
-- `WizardController` expone endpoints como:
-  - `POST /api/wizards` recibe `WizardRequestDTO` y devuelve `WizardDTO`.
-  - `PATCH /api/wizards/{id}` recibe `WizardPatchRequestDTO` y devuelve `WizardDTO`.
-  - `POST /api/wizards/attack` recibe `AttackRequestDTO` y devuelve `AttackResultDTO`.
+- `WizardController` exposes endpoints such as:
+  - `POST /api/wizards` receives `WizardRequestDTO` and returns `WizardDTO`.
+  - `PATCH /api/wizards/{id}` receives `WizardPatchRequestDTO` and returns `WizardDTO`.
+  - `POST /api/wizards/attack` receives `AttackRequestDTO` and returns `AttackResultDTO`.
 - `WizardService`:
-  - Construye un `Wizard` (dominio) desde `WizardRequestDTO`.
-  - Aplica reglas (por ejemplo, asignación de casa si viene vacía, unicidad por (house, name), etc.).
-  - Mapea el resultado a `WizardDTO` con un método privado `toDTO(Wizard)`.
+  - Builds a `Wizard` (domain) from `WizardRequestDTO`.
+  - Applies rules (for example, assigning a house if it comes empty, uniqueness by (house, name), etc.).
+  - Maps the result to `WizardDTO` with a private `toDTO(Wizard)` method.
 
-**Validación en el borde (API)**
+**Validation at the edge (API)**
 
-Los DTOs de request usan anotaciones como `@NotBlank`, `@Size`, `@Pattern`, `@NotNull` y `@Positive`.
-Esto hace que la validación ocurra antes de entrar a la lógica de negocio.
+Request DTOs use annotations such as `@NotBlank`, `@Size`, `@Pattern`, `@NotNull` and `@Positive`.
+This makes validation happen before entering the business logic.
 
 ---
 
@@ -88,16 +88,16 @@ Esto hace que la validación ocurra antes de entrar a la lógica de negocio.
   - `inventory-service/src/main/java/com/magic/hogwarts/inventory/api/dto/response/PotionDTO.java`
   - `inventory-service/src/main/java/com/magic/hogwarts/inventory/api/dto/response/BroomDTO.java`
 
-**Cómo se usan**
+**How they are used**
 
-- Controllers (`WandController`, `PotionController`, `BroomController`) trabajan con DTOs en la firma de los endpoints.
-- Ejemplo claro:
-  - `POST /api/inventory/wands` recibe `WandCreateRequestDTO` y devuelve `WandDTO`.
-  - `POST /api/inventory/wands/{wandId}/assign` recibe `AssignWandRequestDTO` y devuelve `WandDTO`.
+- The controllers (`WandController`, `PotionController`, `BroomController`) work with DTOs in the endpoint signatures.
+- A clear example:
+  - `POST /api/inventory/wands` receives `WandCreateRequestDTO` and returns `WandDTO`.
+  - `POST /api/inventory/wands/{wandId}/assign` receives `AssignWandRequestDTO` and returns `WandDTO`.
 - `WandService`:
-  - Construye `Wand` desde `WandCreateRequestDTO`.
-  - Aplica reglas de asignación (evita reasignación conflictiva).
-  - Mapea `Wand` a `WandDTO` con `toDTO(Wand)`.
+  - Builds a `Wand` from `WandCreateRequestDTO`.
+  - Applies assignment rules (prevents conflicting reassignment).
+  - Maps `Wand` to `WandDTO` with `toDTO(Wand)`.
 
 ---
 
@@ -110,39 +110,38 @@ Esto hace que la validación ocurra antes de entrar a la lógica de negocio.
 - Responses:
   - `duel-service/src/main/java/com/magic/hogwarts/duel/api/dto/response/DuelDTO.java`
 
-**Cómo se usan**
+**How they are used**
 
 - `DuelController`:
-  - `POST /api/duels` recibe `CreateDuelRequestDTO` y devuelve `DuelDTO`.
-  - `GET /api/duels/{id}` devuelve `DuelDTO`.
+  - `POST /api/duels` receives `CreateDuelRequestDTO` and returns `DuelDTO`.
+  - `GET /api/duels/{id}` returns `DuelDTO`.
 - `DuelService`:
-  - Construye la entidad de dominio `Duel` desde el request.
-  - Resuelve el resultado y lo persiste.
-  - Devuelve un `DuelDTO` mapeado desde la entidad con `toDTO(Duel)`.
+  - Builds the `Duel` domain entity from the request.
+  - Resolves the outcome and persists it.
+  - Returns a `DuelDTO` mapped from the entity with `toDTO(Duel)`.
 
-Nota: `DuelDTO` incluye un campo `debugSeed` para reproducibilidad/debug del resultado (dato útil para clientes o troubleshooting).
-
----
-
-## ¿Por qué esta aproximación es útil aquí?
-
-- **Contrato estable de API**: cambios en entidades JPA no rompen necesariamente el JSON público.
-- **Seguridad y control**: solo se exponen campos permitidos; se ocultan detalles internos.
-- **Validación centralizada**: los requests se validan con Bean Validation en el borde (`@Valid` en controllers).
-- **Separación de responsabilidades**:
-  - `api` (Controllers + DTOs): HTTP/JSON y contrato.
-  - `application` (Services): casos de uso y reglas.
-  - `domain` (model): representación del negocio/persistencia.
-  - `infrastructure/persistence`: repositorios y specs.
+Note: `DuelDTO` includes a `debugSeed` field for reproducibility/debugging of the outcome (useful data for clients or troubleshooting).
 
 ---
 
-## Convenciones usadas en los DTOs de este repo
+## Why is this approach useful here?
 
-- Se diferencian explícitamente por carpeta:
-  - `dto/request` (entrada)
-  - `dto/response` (salida)
-- Se usa **Lombok** (`@Data`) para reducir boilerplate (getters/setters).
-- Los DTOs de request suelen llevar **anotaciones de validación**.
-- El mapeo se hace **manual** en los servicios (métodos `toDTO(...)`), en lugar de usar mappers tipo MapStruct (por ahora).
+- **Stable API contract**: changes to JPA entities do not necessarily break the public JSON.
+- **Security and control**: only allowed fields are exposed; internal details are hidden.
+- **Centralized validation**: requests are validated with Bean Validation at the edge (`@Valid` in controllers).
+- **Separation of concerns**:
+  - `api` (Controllers + DTOs): HTTP/JSON and contract.
+  - `application` (Services): use cases and rules.
+  - `domain` (model): business/persistence representation.
+  - `infrastructure/persistence`: repositories and specs.
 
+---
+
+## Conventions used in this repo's DTOs
+
+- They are explicitly separated by folder:
+  - `dto/request` (input)
+  - `dto/response` (output)
+- **Lombok** (`@Data`) is used to reduce boilerplate (getters/setters).
+- Request DTOs usually carry **validation annotations**.
+- Mapping is done **by hand** in the services (`toDTO(...)` methods), instead of using mappers like MapStruct (for now).

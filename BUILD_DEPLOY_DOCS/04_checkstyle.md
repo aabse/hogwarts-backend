@@ -1,17 +1,17 @@
-# Checkstyle: `checkstyle.xml` y `suppressions.xml`
+# Checkstyle: `checkstyle.xml` and `suppressions.xml`
 
-Archivos cubiertos:
+Files covered:
 
 - [`config/checkstyle/checkstyle.xml`](../config/checkstyle/checkstyle.xml)
 - [`config/checkstyle/suppressions.xml`](../config/checkstyle/suppressions.xml)
 
-Se documentan juntos porque están conectados directamente: `checkstyle.xml` declara un `SuppressionFilter` que lee `suppressions.xml`, y ambos son referenciados desde el bloque `checkstyle { ... }` de [`build.gradle`](02_root_build_gradle.md).
+They are documented together because they are directly connected: `checkstyle.xml` declares a `SuppressionFilter` that reads `suppressions.xml`, and both are referenced from the `checkstyle { ... }` block of [`build.gradle`](02_root_build_gradle.md).
 
-## Cómo se conectan con Gradle
+## How they connect to Gradle
 
 ```groovy
 checkstyle {
-    toolVersion = libs.versions.checkstyle.get()   // 12.3.1, en gradle/libs.versions.toml
+    toolVersion = libs.versions.checkstyle.get()   // 12.3.1, in gradle/libs.versions.toml
     configFile = rootProject.file('config/checkstyle/checkstyle.xml')
     configProperties = [
             'checkstyle.suppressions.file': rootProject.file('config/checkstyle/suppressions.xml').absolutePath
@@ -19,7 +19,7 @@ checkstyle {
 }
 ```
 
-Gradle inyecta la ruta absoluta de `suppressions.xml` como la propiedad `checkstyle.suppressions.file`, que `checkstyle.xml` consume así:
+Gradle injects the absolute path of `suppressions.xml` as the `checkstyle.suppressions.file` property, which `checkstyle.xml` consumes like this:
 
 ```xml
 <module name="SuppressionFilter">
@@ -27,7 +27,7 @@ Gradle inyecta la ruta absoluta de `suppressions.xml` como la propiedad `checkst
 </module>
 ```
 
-Esta indirección permite mover `suppressions.xml` de lugar sin tener que hardcodear una ruta dentro de `checkstyle.xml`.
+This indirection lets you move `suppressions.xml` without hardcoding a path inside `checkstyle.xml`.
 
 ## `checkstyle.xml`
 
@@ -69,18 +69,18 @@ Esta indirección permite mover `suppressions.xml` de lugar sin tener que hardco
 </module>
 ```
 
-Reglas activas, todas con `severity=error` (cualquier violación **rompe el build**, no es solo un warning):
+Active rules, all with `severity=error` (any violation **breaks the build**; it is not just a warning):
 
-| Módulo | Alcance | Qué exige |
+| Module | Scope | What it requires |
 |---|---|---|
-| `JavadocPackage` | nivel `Checker` | `package-info.java` con Javadoc en cada paquete |
-| `JavadocType` | `scope=private` | Javadoc en toda declaración de tipo (clases, interfaces...), incluso las `private` |
-| `JavadocMethod` | todos los modificadores de acceso | Javadoc en todo método, con `@param`/`@return`/`@throws` obligatorios cuando aplican |
-| `JavadocVariable` | todos los modificadores de acceso | Javadoc en todo campo/variable, incluso `private` |
-| `UnusedImports` | — | prohíbe imports no usados |
-| `LineLength` | nivel `Checker` | máximo 200 caracteres por línea (exceptuando `package`, `import` y URLs) |
+| `JavadocPackage` | `Checker` level | A `package-info.java` with Javadoc in every package |
+| `JavadocType` | `scope=private` | Javadoc on every type declaration (classes, interfaces...), even `private` ones |
+| `JavadocMethod` | all access modifiers | Javadoc on every method, with `@param`/`@return`/`@throws` required where applicable |
+| `JavadocVariable` | all access modifiers | Javadoc on every field/variable, even `private` ones |
+| `UnusedImports` | — | forbids unused imports |
+| `LineLength` | `Checker` level | at most 200 characters per line (except `package`, `import` and URLs) |
 
-Es una configuración estricta: exige documentación Javadoc exhaustiva incluso en miembros privados, algo poco común en configuraciones por defecto de Checkstyle.
+It is a strict configuration: it requires exhaustive Javadoc documentation even on private members, which is unusual in Checkstyle's default configurations.
 
 ## `suppressions.xml`
 
@@ -90,14 +90,14 @@ Es una configuración estricta: exige documentación Javadoc exhaustiva incluso 
 </suppressions>
 ```
 
-Actualmente **no define ninguna supresión** — es un archivo "andamio" (scaffold) vacío, listo para agregar excepciones puntuales y justificadas si en el futuro hiciera falta (por ejemplo, excluir una clase generada automáticamente de la regla de Javadoc). El comentario dentro del archivo deja explícita la convención del equipo: agregar supresiones solo cuando estén acotadas y justificadas.
+It currently **defines no suppressions** — it is an empty "scaffold" file, ready for adding specific, justified exceptions if they are ever needed (for example, excluding an auto-generated class from the Javadoc rule). The comment inside the file makes the team's convention explicit: add suppressions only when they are narrowly scoped and justified.
 
-## Rol en el pipeline de build/deploy
+## Role in the build/deploy pipeline
 
-Checkstyle corre como parte de `./gradlew check` (tareas `checkstyleMain`/`checkstyleTest`, generadas automáticamente por el plugin `checkstyle` aplicado en `subprojects`). Es una de las verificaciones que se **saltan intencionalmente** al construir la imagen de despliegue para acelerar el build de la imagen — por ejemplo, en [`wizard-service/Dockerfile`](07_wizard_service.md):
+Checkstyle runs as part of `./gradlew check` (the `checkstyleMain`/`checkstyleTest` tasks, generated automatically by the `checkstyle` plugin applied in `subprojects`). It is one of the checks that are **intentionally skipped** when building the deployment image, to speed up the image build — for example, in [`wizard-service/Dockerfile`](07_wizard_service.md):
 
 ```dockerfile
 RUN ./gradlew :wizard-service:bootJar -x test -x checkstyleMain -x checkstyleTest -x spotlessCheck --no-daemon
 ```
 
-Esto asume que el código ya pasó `./gradlew check` (localmente o en un pipeline de CI) **antes** de intentar empaquetarlo — ver el orden completo del pipeline en [`README.md`](README.md).
+This assumes the code has already passed `./gradlew check` (locally or in a CI pipeline) **before** trying to package it — see the full pipeline order in [`README.md`](README.md).

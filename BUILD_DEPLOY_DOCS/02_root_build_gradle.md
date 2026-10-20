@@ -1,13 +1,13 @@
-# `build.gradle` (raíz)
+# `build.gradle` (root)
 
-Archivos cubiertos:
+Files covered:
 
 - [`build.gradle`](../build.gradle)
 - [`gradle/libs.versions.toml`](../gradle/libs.versions.toml)
 
-Es el archivo de configuración compartida de Gradle: define lo que aplica al proyecto raíz y, mediante el bloque `subprojects { ... }`, lo que se aplica automáticamente a los tres microservicios (`wizard-service`, `inventory-service`, `duel-service`). No declara el plugin de Spring Boot — eso vive en el `build.gradle` de cada servicio (ver [`07_wizard_service.md`](07_wizard_service.md), [`08_inventory_service.md`](08_inventory_service.md), [`09_duel_service.md`](09_duel_service.md)), porque el proyecto raíz en sí no es una aplicación ejecutable, solo el "contenedor" de configuración común.
+It is Gradle's shared configuration file: it defines what applies to the root project and, through the `subprojects { ... }` block, what is applied automatically to the three microservices (`wizard-service`, `inventory-service`, `duel-service`). It does not declare the Spring Boot plugin — that lives in each service's `build.gradle` (see [`07_wizard_service.md`](07_wizard_service.md), [`08_inventory_service.md`](08_inventory_service.md), [`09_duel_service.md`](09_duel_service.md)), because the root project itself is not a runnable application, only the "container" for the common configuration.
 
-## Plugins y metadata del proyecto raíz
+## Plugins and root project metadata
 
 ```groovy
 plugins {
@@ -21,12 +21,12 @@ version = '0.0.1-SNAPSHOT'
 description = 'hogwarts'
 ```
 
-- `java` y `jacoco` se aplican también al proyecto raíz.
-- `spotless` se declara con `apply false`: su versión sale del catálogo de versiones (ver la sección siguiente), pero solo se **activa** dentro de `subprojects`, no en la raíz.
-- `group` (`com.magic`) lo heredan siempre los tres servicios.
-- `version` (`0.0.1-SNAPSHOT`) es solo el **valor por defecto**: cada servicio declara su propia versión en su `gradle.properties` (ver la sección [Versión de cada servicio](#versión-de-cada-servicio)).
+- `java` and `jacoco` are also applied to the root project.
+- `spotless` is declared with `apply false`: its version comes from the version catalog (see the next section), but it is only **activated** inside `subprojects`, not on the root.
+- `group` (`com.magic`) is always inherited by the three services.
+- `version` (`0.0.1-SNAPSHOT`) is only the **default value**: each service declares its own version in its `gradle.properties` (see the section [Version of each service](#version-of-each-service)).
 
-## Catálogo de versiones: `gradle/libs.versions.toml`
+## Version catalog: `gradle/libs.versions.toml`
 
 ```toml
 [versions]
@@ -38,34 +38,34 @@ checkstyle = "12.3.1"
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 ```
 
-Gradle carga este archivo automáticamente (por estar en `gradle/` con ese nombre) y lo expone en los scripts como `libs`. Centraliza en un solo lugar las versiones de las **herramientas de build del root**:
+Gradle loads this file automatically (because it is in `gradle/` with that name) and exposes it in the scripts as `libs`. It centralizes in a single place the versions of the **root build tools**:
 
-| Herramienta | Entrada del catálogo | Dónde se usa en `build.gradle` |
+| Tool | Catalog entry | Where it is used in `build.gradle` |
 |---|---|---|
-| Spotless | `libs.plugins.spotless` | Bloque `plugins` |
-| JaCoCo | `libs.versions.jacoco.get()` | `jacoco { toolVersion = ... }`, en la raíz y en `subprojects` |
-| Checkstyle | `libs.versions.checkstyle.get()` | `checkstyle { toolVersion = ... }`, en `subprojects` |
+| Spotless | `libs.plugins.spotless` | `plugins` block |
+| JaCoCo | `libs.versions.jacoco.get()` | `jacoco { toolVersion = ... }`, on the root and in `subprojects` |
+| Checkstyle | `libs.versions.checkstyle.get()` | `checkstyle { toolVersion = ... }`, in `subprojects` |
 
-Para actualizar una de estas herramientas, se cambia solo su línea en `[versions]`.
+To update one of these tools, change only its line in `[versions]`.
 
-**Por qué Spring Boot y las dependencias de los servicios no están en el catálogo**: el build con Buildpacks (ver [`README.md`](README.md) §4.a) se ejecuta desde la carpeta de cada servicio y Cloud Build sube **solo esa carpeta**. Ahí no existe `gradle/libs.versions.toml`, así que un `build.gradle` de servicio que usara `libs.…` no compilaría. Por eso cada servicio declara sus propias versiones (Spring Boot, `spring-retry`, conector de Cloud SQL) y su bloque `repositories`. El costo es que la versión de Spring Boot se repite en los tres `build.gradle` de servicio: al actualizarla, hay que cambiarla en los tres.
+**Why Spring Boot and the services' dependencies are not in the catalog**: the Buildpacks build (see [`README.md`](README.md) §4.a) runs from each service's folder and Cloud Build uploads **only that folder**. `gradle/libs.versions.toml` does not exist there, so a service `build.gradle` using `libs.…` would not compile. That is why each service declares its own versions (Spring Boot, `spring-retry`, Cloud SQL connector) and its own `repositories` block. The cost is that the Spring Boot version is repeated in the three service `build.gradle` files: when updating it, you have to change it in all three.
 
-## Versión de cada servicio
+## Version of each service
 
-Cada servicio se despliega y se versiona por separado, así que su versión vive en un `gradle.properties` dentro de su carpeta:
+Each service is deployed and versioned separately, so its version lives in a `gradle.properties` inside its folder:
 
 ```properties
 # wizard-service/gradle.properties
-# Version propia del servicio (se usa en el jar y en los tags de imagen).
+# Service's own version (used for the jar name and the image tags).
 version=0.0.1-SNAPSHOT
 ```
 
-Gradle lee ese archivo al crear el subproyecto. Para que la raíz no lo pise, el bloque `subprojects` solo asigna la versión del root a los servicios que no tienen una propia:
+Gradle reads that file when it creates the subproject. So that the root does not overwrite it, the `subprojects` block only assigns the root version to services that do not have their own:
 
 ```groovy
 subprojects {
     group = rootProject.group
-    // Cada servicio define su version en su gradle.properties; si no la define, hereda la del root.
+    // Each service defines its version in its gradle.properties; otherwise it inherits the root's.
     if (version.toString() == 'unspecified') {
         version = rootProject.version
     }
@@ -73,17 +73,17 @@ subprojects {
 }
 ```
 
-Esa versión da nombre al jar (`wizard-service-0.0.1-SNAPSHOT.jar`) y es también el tag de la imagen de contenedor. Las reglas para incrementarla (versionado semántico `MAJOR.MINOR.PATCH`) y el flujo de release están en [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md) §4.
+That version names the jar (`wizard-service-0.0.1-SNAPSHOT.jar`) and is also the container image tag. The rules for incrementing it (semantic versioning `MAJOR.MINOR.PATCH`) and the release flow are in [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md) §4.
 
-Como `gradle.properties` está dentro de la carpeta del servicio, también funciona en el build aislado de Buildpacks.
+Since `gradle.properties` is inside the service folder, it also works in the isolated Buildpacks build.
 
-Para ver la versión resuelta de un servicio:
+To see a service's resolved version:
 
 ```bash
 ./gradlew -q :wizard-service:properties | grep '^version:'
 ```
 
-## Toolchain de Java
+## Java toolchain
 
 ```groovy
 java {
@@ -93,15 +93,15 @@ java {
 }
 ```
 
-Fija **Java 17** tanto en la raíz como (repetido) dentro de `subprojects`. Gradle usa esta toolchain para compilar y ejecutar, independientemente del JDK que tenga instalado quien ejecuta el build (siempre que Gradle pueda localizar o descargar un JDK 17).
+It pins **Java 17** both on the root and (repeated) inside `subprojects`. Gradle uses this toolchain to compile and run, regardless of the JDK installed by whoever runs the build (as long as Gradle can locate or download a JDK 17).
 
-## Bloque `subprojects { ... }`
+## The `subprojects { ... }` block
 
-Se aplica automáticamente a `wizard-service`, `inventory-service` y `duel-service` (los módulos declarados en [`settings.gradle`](03_settings_gradle.md)):
+It is applied automatically to `wizard-service`, `inventory-service` and `duel-service` (the modules declared in [`settings.gradle`](03_settings_gradle.md)):
 
-- Aplica los plugins `java`, `checkstyle`, `com.diffplug.spotless`, `jacoco`.
-- Asigna `group` y, si el servicio no tiene una propia, `version` (ver [Versión de cada servicio](#versión-de-cada-servicio)).
-- Repite el toolchain de Java 17 y el repositorio `mavenCentral()`.
+- Applies the `java`, `checkstyle`, `com.diffplug.spotless` and `jacoco` plugins.
+- Assigns `group` and, if the service does not have its own, `version` (see [Version of each service](#version-of-each-service)).
+- Repeats the Java 17 toolchain and the `mavenCentral()` repository.
 - **Checkstyle**:
   ```groovy
   checkstyle {
@@ -112,8 +112,8 @@ Se aplica automáticamente a `wizard-service`, `inventory-service` y `duel-servi
       ]
   }
   ```
-  Ver el detalle completo de las reglas en [`04_checkstyle.md`](04_checkstyle.md). Los reportes de Checkstyle se fuerzan en XML y HTML (`tasks.withType(Checkstyle).configureEach { reports { xml.required = true; html.required = true } }`).
-- **Spotless** (formateo automático de Java):
+  See the full details of the rules in [`04_checkstyle.md`](04_checkstyle.md). Checkstyle reports are forced to XML and HTML (`tasks.withType(Checkstyle).configureEach { reports { xml.required = true; html.required = true } }`).
+- **Spotless** (automatic Java formatting):
   ```groovy
   spotless {
       java {
@@ -124,17 +124,17 @@ Se aplica automáticamente a `wizard-service`, `inventory-service` y `duel-servi
       }
   }
   ```
-  Usa Google Java Format. `tasks.named('check') { dependsOn 'spotlessCheck' }` hace que un formateo incorrecto **rompa** `./gradlew check`.
-- **JaCoCo por módulo**: `toolVersion = libs.versions.jacoco.get()` (0.8.12); `test` queda `finalizedBy 'jacocoTestReport'` (el reporte de cobertura se genera automáticamente después de cada `test`), con reportes XML y HTML forzados.
+  It uses Google Java Format. `tasks.named('check') { dependsOn 'spotlessCheck' }` makes incorrect formatting **break** `./gradlew check`.
+- **JaCoCo per module**: `toolVersion = libs.versions.jacoco.get()` (0.8.12); `test` is `finalizedBy 'jacocoTestReport'` (the coverage report is generated automatically after every `test`), with XML and HTML reports forced.
 
-## Tareas personalizadas a nivel raíz
+## Custom root-level tasks
 
 ```groovy
 tasks.register('testAll') {
     dependsOn(subprojects.collect { it.tasks.matching { t -> t.name == 'test' } })
 }
 ```
-Ejecuta los tests de los tres módulos con un solo comando (`./gradlew testAll`), sin correr el resto del quality gate (spotless/checkstyle/cobertura).
+Runs the tests of the three modules with a single command (`./gradlew testAll`), without running the rest of the quality gate (spotless/checkstyle/coverage).
 
 ```groovy
 def coverageExclusions = [
@@ -150,16 +150,16 @@ tasks.register('jacocoRootReport', JacocoReport) { ... }
 tasks.register('jacocoRootCoverageVerification', JacocoCoverageVerification) { ... }
 ```
 
-- `jacocoRootReport`: agrega los `.exec` de cobertura de los tres módulos en un único reporte (`build/reports/jacoco/jacocoRootReport/{jacocoRootReport.xml,html}`), excluyendo de la métrica las clases `*Application`, DTOs, código `common`, modelos de dominio, la capa de persistencia y `package-info`.
-- `jacocoRootCoverageVerification`: aplica un **gate de cobertura mínima del 90% en líneas** (`counter = 'LINE'`, `value = 'COVEREDRATIO'`, `minimum = 0.90`) sobre ese reporte agregado.
-- Finalmente:
+- `jacocoRootReport`: aggregates the coverage `.exec` files of the three modules into a single report (`build/reports/jacoco/jacocoRootReport/{jacocoRootReport.xml,html}`), excluding from the metric the `*Application` classes, DTOs, `common` code, domain models, the persistence layer and `package-info`.
+- `jacocoRootCoverageVerification`: applies a **minimum line coverage gate of 90%** (`counter = 'LINE'`, `value = 'COVEREDRATIO'`, `minimum = 0.90`) on that aggregated report.
+- Finally:
   ```groovy
   tasks.named('check') {
       dependsOn 'jacocoRootCoverageVerification'
   }
   ```
-  Esto encadena todo: `./gradlew check` en la raíz dispara compilación + tests de los tres módulos + `spotlessCheck` + Checkstyle + el gate de cobertura del 90%. Es el comando que valida que el proyecto está listo para compilar/empaquetar antes de generar cualquier imagen de despliegue.
+  This chains everything together: `./gradlew check` on the root triggers compilation + tests of the three modules + `spotlessCheck` + Checkstyle + the 90% coverage gate. It is the command that validates that the project is ready to build/package before generating any deployment image.
 
-## Rol en el pipeline de build/deploy
+## Role in the build/deploy pipeline
 
-Este es el archivo que Gradle lee primero (junto con `settings.gradle` y el catálogo `gradle/libs.versions.toml`) para saber qué reglas de calidad y qué versiones de herramientas aplican a **todo** el monorepo. Los `Dockerfile` de los servicios compilan desde la raíz, así que usan esta configuración, aunque saltan los pasos de calidad (`-x test -x checkstyleMain -x spotlessCheck`) para acelerar la imagen. El build vía Buildpacks, en cambio, compila cada servicio aislado y **no** usa este archivo. En los dos casos, lo que garantiza que el código cumple estas reglas es `./gradlew check`, ejecutado antes (en local o en CI) de construir la imagen. Ver el flujo completo en [`README.md`](README.md).
+This is the file Gradle reads first (together with `settings.gradle` and the `gradle/libs.versions.toml` catalog) to know which quality rules and which tool versions apply to the **whole** monorepo. The services' `Dockerfile`s compile from the root, so they use this configuration, although they skip the quality steps (`-x test -x checkstyleMain -x spotlessCheck`) to speed up the image. The Buildpacks build, on the other hand, compiles each service in isolation and does **not** use this file. In both cases, what guarantees that the code meets these rules is `./gradlew check`, run beforehand (locally or in CI) before building the image. See the full flow in [`README.md`](README.md).

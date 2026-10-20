@@ -1,187 +1,187 @@
-# ADVANCED_ROADMAP — Spring Boot (nivel avanzado) + Microservicios + GCP (GKE)
+# ADVANCED_ROADMAP — Spring Boot (advanced level) + Microservices + GCP (GKE)
 
-Este documento propone un backlog/roadmap **orientado a aprendizaje profundo** de Spring y a una evolución realista hacia **microservicios por dominio** con despliegue en **GCP**.  
-La idea es que cada épica te obligue a tocar temas “de verdad”: consistencia, resiliencia, testing serio, observabilidad, seguridad, CI/CD, infraestructura.
-
----
-
-## Principios y objetivos
-
-- **Microservicios**:
-  - `wizard-service`: gestión de magos, niveles y casas.
-  - `duel-service`: lógica de batallas/duelos (**acá vive el retry con `@Retryable`**).
-  - `inventory-service`: gestión de inventario (varitas, pociones y escobas).
-  - `config-server`: configuración centralizada.
-  - `api-gateway`: punto de entrada único + seguridad (JWT).
-- **API-first**: contratos claros, versionado, errores consistentes.
-- **Confiabilidad**: timeouts, retries con criterio, idempotencia, tolerancia a fallos.
-- **Observabilidad por defecto**: logs estructurados + trazas + métricas.
-- **Seguridad desde el inicio**: authn/authz, secretos, least privilege.
-- **Evolución incremental**: primero modularizar el monolito, luego extraer servicios.
+This document proposes a backlog/roadmap **aimed at deep learning** of Spring and at a realistic evolution towards **domain-based microservices** deployed on **GCP**.  
+The idea is that each epic forces you to deal with "real" topics: consistency, resilience, serious testing, observability, security, CI/CD, infrastructure.
 
 ---
 
-## Fase 0 — Baseline del proyecto (calidad mínima profesional)
+## Principles and goals
 
-### 0.1 Estándares y documentación
-- [ ] **README** con cómo correr local, endpoints, y estructura del dominio.
-- [ ] **Convención de commits**, branching, y versionado.
-- [ ] **OpenAPI** para endpoints (Swagger UI) y ejemplo de requests/responses.
+- **Microservices**:
+  - `wizard-service`: management of wizards, levels and houses.
+  - `duel-service`: battle/duel logic (**this is where the retry with `@Retryable` lives**).
+  - `inventory-service`: inventory management (wands, potions and brooms).
+  - `config-server`: centralized configuration.
+  - `api-gateway`: single entry point + security (JWT).
+- **API-first**: clear contracts, versioning, consistent errors.
+- **Reliability**: timeouts, sensible retries, idempotency, fault tolerance.
+- **Observability by default**: structured logs + traces + metrics.
+- **Security from the start**: authn/authz, secrets, least privilege.
+- **Incremental evolution**: first modularize the monolith, then extract services.
+
+---
+
+## Phase 0 — Project baseline (minimum professional quality)
+
+### 0.1 Standards and documentation
+- [ ] **README** with how to run locally, endpoints, and the domain structure.
+- [ ] **Commit convention**, branching, and versioning.
+- [ ] **OpenAPI** for the endpoints (Swagger UI) and request/response examples.
 
 **Definition of Done (DoD)**  
-- El proyecto se ejecuta local en 1 comando (o 2 como máximo) y está documentado.
-- Existe documentación de API y errores típicos (400/404/409).
+- The project runs locally with 1 command (or 2 at most) and is documented.
+- There is documentation of the API and typical errors (400/404/409).
 
-**Aprendizaje**: Spring Web, validación, diseño de API, DX.
+**Learning**: Spring Web, validation, API design, DX.
 
-### 0.2 Testing serio (no sólo “context loads”)
-- [ ] Unit tests de servicios (reglas de negocio).
-- [ ] WebMvcTest para controllers + validación.
-- [ ] Integración con DB real via **Testcontainers (Postgres)** (evitar divergencia H2 vs prod).
-- [ ] Cobertura mínima por módulo y criterios de calidad (no como número, sino por rutas críticas).
+### 0.2 Serious testing (not just "context loads")
+- [ ] Unit tests for services (business rules).
+- [ ] WebMvcTest for controllers + validation.
+- [ ] Integration with a real DB via **Testcontainers (Postgres)** (avoid H2 vs prod drift).
+- [ ] Minimum coverage per module and quality criteria (not as a number, but by critical paths).
 
 **DoD**  
-- CI falla si tests críticos fallan.
-- Hay tests para “happy path” y “edge cases”.
+- CI fails if critical tests fail.
+- There are tests for the "happy path" and "edge cases".
 
-**Aprendizaje**: Spring Test, Testcontainers, slicing tests.
+**Learning**: Spring Test, Testcontainers, test slicing.
 
 ---
 
-## Fase 1 — Modularización previa (pre-microservicios)
+## Phase 1 — Prior modularization (pre-microservices)
 
-Objetivo: preparar el código para dividirse sin dolor.
+Goal: prepare the code to be split painlessly.
 
-- [ ] Reorganizar paquetes por dominio (por ejemplo):
+- [ ] Reorganize packages by domain (for example):
   - `com.magic.hogwarts.wizard.*`
   - `com.magic.hogwarts.inventory.*`
   - `com.magic.hogwarts.duel.*`
-- [ ] Definir **DTOs** por capa (request/response), evitando exponer entidades JPA.
-- [ ] Unificar respuesta de errores (código, mensaje, timestamp, path, traceId).
-- [ ] Agregar paginación/filtros en listados (Spring Data).
+- [ ] Define **DTOs** per layer (request/response), avoiding exposing JPA entities.
+- [ ] Unify the error response (code, message, timestamp, path, traceId).
+- [ ] Add pagination/filters to listings (Spring Data).
 
 **DoD**
-- No hay referencias circulares entre dominios.
-- Controllers no devuelven entidades JPA directamente.
+- There are no circular references between domains.
+- Controllers do not return JPA entities directly.
 
-**Aprendizaje**: arquitectura por dominios, separación de capas, contratos.
+**Learning**: domain-based architecture, layer separation, contracts.
 
 ---
 
-## Fase 2 — `wizard-service` (microservicio 1)
+## Phase 2 — `wizard-service` (microservice 1)
 
-### 2.1 Extracción del servicio
-- [ ] Convertir el proyecto a **multi-módulo Gradle** (o repos separados) y extraer `wizard-service`.
-- [ ] Definir boundaries: el servicio es dueño de `Wizard` y su DB.
-- [ ] Crear endpoints completos:
+### 2.1 Extracting the service
+- [ ] Turn the project into a **Gradle multi-module** build (or separate repos) and extract `wizard-service`.
+- [ ] Define boundaries: the service owns `Wizard` and its DB.
+- [ ] Create complete endpoints:
   - `POST /api/wizards`
-  - `GET /api/wizards` (paginado + filtros)
+  - `GET /api/wizards` (paginated + filters)
   - `GET /api/wizards/{id}`
-  - `PATCH /api/wizards/{id}` (parcial)
-  - `DELETE /api/wizards/{id}` (si aplica)
-- [ ] Enriquecer el modelo con reglas (ej.: nombre único por casa, límites de nivel, etc.).
+  - `PATCH /api/wizards/{id}` (partial)
+  - `DELETE /api/wizards/{id}` (if applicable)
+- [ ] Enrich the model with rules (e.g. unique name per house, level limits, etc.).
 
 **DoD**
-- Un `wizard-service` se ejecuta solo y pasa su suite de tests.
-- Contrato OpenAPI estable y versionado (v1).
+- A `wizard-service` runs on its own and passes its test suite.
+- Stable, versioned OpenAPI contract (v1).
 
-**Aprendizaje**: modularización, DDD-lite, API design.
+**Learning**: modularization, DDD-lite, API design.
 
-### 2.2 Persistencia “de producción”
-- [ ] Migraciones con **Flyway** o **Liquibase**.
-- [ ] Constraints e índices (unicidad, not-null, índices de búsqueda).
-- [ ] Separar “read model” vs “write model” cuando sea útil (proyección/DTO optimizado).
-
-**DoD**
-- La DB se recrea desde cero sólo con migraciones.
-- Las queries principales están indexadas y justificadas.
-
-**Aprendizaje**: JPA/Hibernate, SQL real, migraciones.
-
-### 2.3 Concurrencia, idempotencia y consistencia
-- [ ] Mantener **optimistic locking** (`@Version`) y **retry** con backoff.
-- [ ] Introducir **idempotency key** en operaciones de escritura críticas (si aplica).
-- [ ] Validar invariantes ante concurrencia (tests con múltiples hilos / escenarios).
+### 2.2 "Production" persistence
+- [ ] Migrations with **Flyway** or **Liquibase**.
+- [ ] Constraints and indexes (uniqueness, not-null, search indexes).
+- [ ] Separate the "read model" from the "write model" when useful (optimized projection/DTO).
 
 **DoD**
-- Se puede simular un conflicto y el sistema responde 409 o reintenta correctamente.
+- The DB can be recreated from scratch with migrations only.
+- The main queries are indexed and justified.
 
-**Aprendizaje**: concurrencia, patrones de consistencia.
+**Learning**: JPA/Hibernate, real SQL, migrations.
 
-### 2.4 Resiliencia interna (dentro del servicio)
-- [ ] Timeouts consistentes en llamadas externas (si las hubiera).
-- [ ] Circuit breaker/bulkhead para dependencias (si agregas integraciones).
+### 2.3 Concurrency, idempotency and consistency
+- [ ] Keep **optimistic locking** (`@Version`) and **retry** with backoff.
+- [ ] Introduce an **idempotency key** on critical write operations (if applicable).
+- [ ] Validate invariants under concurrency (tests with multiple threads / scenarios).
 
-**Aprendizaje**: resiliencia (retry con criterio, fallos).
+**DoD**
+- A conflict can be simulated and the system responds with 409 or retries correctly.
+
+**Learning**: concurrency, consistency patterns.
+
+### 2.4 Internal resilience (inside the service)
+- [ ] Consistent timeouts on external calls (if any).
+- [ ] Circuit breaker/bulkhead for dependencies (if you add integrations).
+
+**Learning**: resilience (sensible retries, failures).
 
 ---
 
-## Fase 3 — `inventory-service` (microservicio 2)
+## Phase 3 — `inventory-service` (microservice 2)
 
-### 3.1 Extracción y modelo de inventario
-- [ ] Extraer `inventory-service` como dueño de:
-  - `Wand` (varitas)
-  - `Potion` (pociones)
-  - `Broom` (escobas)
-- [ ] Reglas avanzadas: stock, disponibilidad, asignación, auditoría de cambios.
+### 3.1 Extraction and inventory model
+- [ ] Extract `inventory-service` as the owner of:
+  - `Wand`
+  - `Potion`
+  - `Broom`
+- [ ] Advanced rules: stock, availability, assignment, change auditing.
 - [ ] Endpoints:
   - `POST /api/inventory/wands`
-  - `GET /api/inventory/wands` (paginado + filtros)
+  - `GET /api/inventory/wands` (paginated + filters)
   - `POST /api/inventory/potions`
-  - `GET /api/inventory/potions` (paginado + filtros)
+  - `GET /api/inventory/potions` (paginated + filters)
   - `POST /api/inventory/brooms`
-  - `GET /api/inventory/brooms` (paginado + filtros)
-  - `POST /api/inventory/wands/{wandId}/assign` (asignar a wizard)
+  - `GET /api/inventory/brooms` (paginated + filters)
+  - `POST /api/inventory/wands/{wandId}/assign` (assign to a wizard)
 
-**Decisión arquitectónica (aprendizaje clave)**  
-¿La relación wizard↔wand se resuelve con:
-- **(A) Referencias por ID** (cada servicio guarda el ID del otro) + validación por API/eventos, o
-- **(B) Event-driven** (inventory-service emite “wand-assigned” y wizard-service materializa un read model)?
+**Architectural decision (key learning)**  
+Is the wizard↔wand relationship resolved with:
+- **(A) References by ID** (each service stores the other's ID) + validation via API/events, or
+- **(B) Event-driven** (inventory-service emits "wand-assigned" and wizard-service materializes a read model)?
 
 **DoD**
-- El servicio opera independientemente, con migraciones y tests.
-- Contrato API con versionado.
+- The service operates independently, with migrations and tests.
+- A versioned API contract.
 
-**Aprendizaje**: boundaries, modelado, consistencia entre servicios.
+**Learning**: boundaries, modeling, consistency between services.
 
 ---
 
-## Fase 4 — `duel-service` (microservicio 3)
+## Phase 4 — `duel-service` (microservice 3)
 
-### 4.1 Orquestación de duelos
-- [ ] Extraer `duel-service` como dueño de `Duel` (historial, estado, timestamps, participantes).
+### 4.1 Duel orchestration
+- [ ] Extract `duel-service` as the owner of `Duel` (history, status, timestamps, participants).
 - [ ] Endpoint:
-  - `POST /api/duels` (crea un duelo: attackerId, defenderId)
-  - `GET /api/duels/{id}` (estado + resultado)
-- [ ] Decisión del resultado en servidor (por nivel, aleatorio, reglas, etc.).
-- [ ] Mover/centralizar acá la lógica de **retry** (`@Retryable`) aplicada a efectos del duelo.
-- [ ] Auditoría: guardar evento/resultado, permitir “replay”/debug.
+  - `POST /api/duels` (creates a duel: attackerId, defenderId)
+  - `GET /api/duels/{id}` (status + result)
+- [ ] Decide the outcome on the server (by level, random, rules, etc.).
+- [ ] Move/centralize here the **retry** logic (`@Retryable`) applied to the duel's effects.
+- [ ] Auditing: store the event/result, allow "replay"/debugging.
 
 **DoD**
-- Cada duelo genera un registro persistente y reproducible (misma entrada → mismo resultado si se define).
+- Each duel produces a persistent, reproducible record (same input → same result, if defined that way).
 
-**Aprendizaje**: orquestación, auditoría, diseño de flujos.
+**Learning**: orchestration, auditing, flow design.
 
-### 4.2 Consistencia cross-service (patrones avanzados)
-- [ ] Implementar **Saga (orchestration)** si el duelo impacta a varios servicios.
-- [ ] Implementar **Transactional Outbox** para publicar eventos de forma confiable.
+### 4.2 Cross-service consistency (advanced patterns)
+- [ ] Implement a **Saga (orchestration)** if the duel affects several services.
+- [ ] Implement a **Transactional Outbox** to publish events reliably.
 
 **DoD**
-- No hay “double updates” ni eventos perdidos ante caídas.
+- No "double updates" or lost events in case of crashes.
 
-**Aprendizaje**: outbox, sagas, consistencia eventual.
+**Learning**: outbox, sagas, eventual consistency.
 
 ---
 
-## Fase 5 — Comunicación entre microservicios
+## Phase 5 — Communication between microservices
 
-### 5.1 Síncrona (REST)
-- [ ] Timeouts por defecto, retries limitados, circuit breaker.
-- [ ] Versionado de APIs y compatibilidad hacia atrás.
-- [ ] Contract testing (consumer-driven) entre servicios.
+### 5.1 Synchronous (REST)
+- [ ] Default timeouts, limited retries, circuit breaker.
+- [ ] API versioning and backward compatibility.
+- [ ] Contract testing (consumer-driven) between services.
 
-### 5.2 Asíncrona (eventos)
-- [ ] Definir un catálogo de eventos:
+### 5.2 Asynchronous (events)
+- [ ] Define an event catalog:
   - `wizard-created`
   - `wizard-leveled-up`
   - `inventory-wand-created`
@@ -189,89 +189,89 @@ Objetivo: preparar el código para dividirse sin dolor.
   - `inventory-potion-created`
   - `inventory-broom-created`
   - `duel-finished`
-- [ ] Diseñar eventos con:
+- [ ] Design events with:
   - `eventId`, `eventType`, `occurredAt`, `schemaVersion`, `payload`
-  - idempotencia del consumidor (deduplicación).
+  - consumer idempotency (deduplication).
 
 **DoD**
-- Consumidores idempotentes + replay controlado de eventos.
+- Idempotent consumers + controlled event replay.
 
-**Aprendizaje**: event-driven, schemas, idempotencia distribuida.
+**Learning**: event-driven, schemas, distributed idempotency.
 
 ---
 
-## Fase 6 — `api-gateway` (Edge)
+## Phase 6 — `api-gateway` (Edge)
 
-- [ ] Agregar `api-gateway` (ej.: Spring Cloud Gateway) para:
-  - routing por servicio
+- [ ] Add an `api-gateway` (e.g. Spring Cloud Gateway) for:
+  - per-service routing
   - rate limiting
-  - authn/authz centralizado (JWT)
-  - correlation-id y headers comunes
-- [ ] Versionar rutas externas (`/api/v1/...`) y mapear a servicios internos.
+  - centralized authn/authz (JWT)
+  - correlation-id and common headers
+- [ ] Version the external routes (`/api/v1/...`) and map them to internal services.
 
 **DoD**
-- El cliente habla con el gateway; los servicios pueden estar privados.
+- The client talks to the gateway; the services can be private.
 
-**Aprendizaje**: edge patterns, seguridad centralizada.
+**Learning**: edge patterns, centralized security.
 
 ---
 
-## Fase 7 — Seguridad (avanzada)
+## Phase 7 — Security (advanced)
 
-- [ ] OAuth2/OIDC con JWT:
-  - roles/authorities (ej.: `wizard:read`, `wizard:write`, `duel:execute`)
-  - validación en gateway y/o en cada servicio
-- [ ] Gestión de secretos:
-  - local: `.env` / vault local (sin commitear)
+- [ ] OAuth2/OIDC with JWT:
+  - roles/authorities (e.g. `wizard:read`, `wizard:write`, `duel:execute`)
+  - validation in the gateway and/or in each service
+- [ ] Secret management:
+  - local: `.env` / local vault (not committed)
   - cloud: GCP Secret Manager
-- [ ] Protección ante abuso:
-  - rate limit en gateway
-  - límites de payload, timeouts, headers.
+- [ ] Abuse protection:
+  - rate limiting in the gateway
+  - payload limits, timeouts, headers.
 
 **DoD**
-- Rutas protegidas, permisos por rol, y tests de seguridad básicos.
+- Protected routes, role-based permissions, and basic security tests.
 
-**Aprendizaje**: Spring Security, OIDC, hardening.
+**Learning**: Spring Security, OIDC, hardening.
 
 ---
 
-## Fase 8 — Observabilidad (operación real)
+## Phase 8 — Observability (real operations)
 
-- [ ] Logging estructurado (JSON) + `traceId`/`correlationId`.
-- [ ] Tracing distribuido con **OpenTelemetry** (propagar context entre servicios).
-- [ ] Métricas con **Micrometer** (latencia, errores, saturación).
-- [ ] Health: liveness/readiness, indicadores de DB/broker.
+- [ ] Structured logging (JSON) + `traceId`/`correlationId`.
+- [ ] Distributed tracing with **OpenTelemetry** (propagate the context between services).
+- [ ] Metrics with **Micrometer** (latency, errors, saturation).
+- [ ] Health: liveness/readiness, DB/broker indicators.
 
 **DoD**
-- Puedes seguir una request end-to-end (gateway → service → service) con trace.
+- You can follow a request end-to-end (gateway → service → service) with a trace.
 
-**Aprendizaje**: o11y, trazas, métricas, debugging.
+**Learning**: o11y, traces, metrics, debugging.
 
 ---
 
-## Fase 9 — Plataforma local + CI/CD
+## Phase 9 — Local platform + CI/CD
 
-### 9.1 Contenerización
-- [ ] `Dockerfile` por servicio (multi-stage, usuario no-root).
-- [ ] `docker-compose` para dev:
-  - Postgres por servicio (o uno con schemas separados al inicio)
-  - (más adelante) broker/event bus
+### 9.1 Containerization
+- [ ] A `Dockerfile` per service (multi-stage, non-root user).
+- [ ] `docker-compose` for dev:
+  - Postgres per service (or one with separate schemas at first)
+  - (later) a broker/event bus
 
-### 9.2 CI/CD (GitHub Actions o Cloud Build)
-- [ ] Pipeline: build + tests + análisis (SAST) + SBOM + escaneo de imágenes.
-- [ ] Versionado de imagen y promoción por ambientes (dev/stg/prod).
+### 9.2 CI/CD (GitHub Actions or Cloud Build)
+- [ ] Pipeline: build + tests + analysis (SAST) + SBOM + image scanning.
+- [ ] Image versioning and promotion across environments (dev/stg/prod).
 
 **DoD**
-- Build reproducible, imágenes firmadas/escaneadas, y despliegue automatizado.
+- Reproducible build, signed/scanned images, and automated deployment.
 
-**Aprendizaje**: DevOps, supply chain, automatización.
+**Learning**: DevOps, supply chain, automation.
 
 ---
 
-## Fase 10 — GCP hands-on (GKE)
+## Phase 10 — GCP hands-on (GKE)
 
 ### 10.1 GKE
-- [ ] Crear proyecto GCP y habilitar APIs:
+- [ ] Create a GCP project and enable the APIs:
   - Artifact Registry
   - GKE
   - Cloud SQL
@@ -279,91 +279,90 @@ Objetivo: preparar el código para dividirse sin dolor.
   - Pub/Sub
   - Cloud Logging/Monitoring
 - [ ] Artifact Registry:
-  - repo Docker para imágenes
-- [ ] Elegir packaging:
-  - Helm charts por servicio, o
-  - Kustomize overlays por ambiente
-- [ ] Deploy a GKE (uno por servicio):
-  - namespaces por ambiente/equipo
+  - Docker repo for the images
+- [ ] Choose the packaging:
+  - Helm charts per service, or
+  - Kustomize overlays per environment
+- [ ] Deploy to GKE (one per service):
+  - namespaces per environment/team
   - HPA
   - PodDisruptionBudget
   - requests/limits
 - [ ] Identity:
-  - Workload Identity (evitar keys)
-- [ ] Ingress + routing (o gateway en cluster).
-- [ ] Cloud SQL (Postgres) por servicio (recomendado) + Cloud SQL Auth Proxy como sidecar.
-- [ ] Secret Manager para credenciales y JWT/OIDC configs.
-- [ ] Pub/Sub para eventos entre servicios (si adoptas event-driven).
-- [ ] Observabilidad:
+  - Workload Identity (avoid keys)
+- [ ] Ingress + routing (or a gateway in the cluster).
+- [ ] Cloud SQL (Postgres) per service (recommended) + Cloud SQL Auth Proxy as a sidecar.
+- [ ] Secret Manager for credentials and JWT/OIDC configs.
+- [ ] Pub/Sub for events between services (if you adopt event-driven).
+- [ ] Observability:
   - Managed Prometheus / OpenTelemetry collector.
 
 **DoD**
-- Un entorno en GKE con despliegue declarativo, autoscaling funcional, logs y métricas visibles.
+- An environment on GKE with declarative deployment, working autoscaling, and visible logs and metrics.
 
-**Aprendizaje**: Kubernetes real, Cloud SQL, Secret Manager, Pub/Sub, IAM, Workload Identity, operaciones, escalado.
+**Learning**: real Kubernetes, Cloud SQL, Secret Manager, Pub/Sub, IAM, Workload Identity, operations, scaling.
 
-### 10.2 Infra como código (recomendado)
-- [ ] Terraform para:
-  - repos Artifact Registry
-  - cluster GKE
+### 10.2 Infrastructure as code (recommended)
+- [ ] Terraform for:
+  - Artifact Registry repos
+  - GKE cluster
   - Cloud SQL
   - Secret Manager
   - Pub/Sub topics/subscriptions
   - IAM bindings
 
 **DoD**
-- Infra recreable desde cero (sin clicks manuales críticos).
+- Infrastructure that can be recreated from scratch (no critical manual clicks).
 
-**Aprendizaje**: IaC, gobernanza, reproducibilidad.
+**Learning**: IaC, governance, reproducibility.
 
 ---
 
-## Fase 11 — Calidad, arquitectura y performance
+## Phase 11 — Quality, architecture and performance
 
-- [ ] ADRs (Architecture Decision Records) por decisiones clave (sync vs async, DB per service, gateway, etc.).
-- [ ] Performance testing (k6/JMeter) con objetivos (p95 latency, error rate).
-- [ ] “Chaos lite”: fallos controlados (timeouts, caídas de dependencia) y validación de degradación.
+- [ ] ADRs (Architecture Decision Records) for key decisions (sync vs async, DB per service, gateway, etc.).
+- [ ] Performance testing (k6/JMeter) with targets (p95 latency, error rate).
+- [ ] "Chaos lite": controlled failures (timeouts, dependency outages) and validation of graceful degradation.
 
 **DoD**
-- Decisiones documentadas + pruebas de performance repetibles.
+- Documented decisions + repeatable performance tests.
 
-**Aprendizaje**: arquitectura viva, performance, resiliencia avanzada.
-
----
-
-## Ruta sugerida (para maximizar aprendizaje)
-
-1) Fase 0 (tests + docs)  
-2) Fase 1 (modularización)  
-3) Extraer `wizard-service` primero  
-4) Agregar gateway + seguridad básica  
-5) Extraer `inventory-service`  
-6) Extraer `duel-service` + mover `@Retryable` + eventos/outbox  
-7) Observabilidad end-to-end  
-8) GKE (deploy real y operación Kubernetes)  
+**Learning**: living architecture, performance, advanced resilience.
 
 ---
 
-## Fase X — `config-server` (Configuración centralizada)
+## Suggested path (to maximize learning)
 
-Objetivo: extraer la configuración de cada servicio a un punto central, con perfiles y despliegue por ambiente.
+1) Phase 0 (tests + docs)  
+2) Phase 1 (modularization)  
+3) Extract `wizard-service` first  
+4) Add the gateway + basic security  
+5) Extract `inventory-service`  
+6) Extract `duel-service` + move `@Retryable` + events/outbox  
+7) End-to-end observability  
+8) GKE (real deployment and Kubernetes operations)  
 
-- [ ] Crear `config-server` (Spring Cloud Config Server o alternativa) y definir:
-  - `application.yml` por servicio (`wizard-service`, `inventory-service`, `duel-service`, `api-gateway`)
-  - perfiles: `local`, `dev`, `stg`, `prod`
-- [ ] Estrategia de storage:
-  - repo Git de configuración (recomendado para aprendizaje) o
-  - Secret Manager/Parameter Store (en GCP) para secretos
-- [ ] Integración de clientes:
-  - bootstrap de config en cada microservicio
-  - refresh controlado (si aplica)
-- [ ] Seguridad del config:
-  - auth entre servicios y config-server
-  - separar secretos (no guardarlos en texto plano en Git)
+---
+
+## Phase X — `config-server` (centralized configuration)
+
+Goal: move each service's configuration to a central point, with profiles and per-environment deployment.
+
+- [ ] Create a `config-server` (Spring Cloud Config Server or an alternative) and define:
+  - an `application.yml` per service (`wizard-service`, `inventory-service`, `duel-service`, `api-gateway`)
+  - profiles: `local`, `dev`, `stg`, `prod`
+- [ ] Storage strategy:
+  - a Git configuration repo (recommended for learning) or
+  - Secret Manager/Parameter Store (on GCP) for secrets
+- [ ] Client integration:
+  - config bootstrap in each microservice
+  - controlled refresh (if applicable)
+- [ ] Config security:
+  - auth between the services and the config-server
+  - keep secrets separate (do not store them in plain text in Git)
 
 **DoD**
-- Cada microservicio puede arrancar con config externa por ambiente.
-- Config auditada/versionada y con rollback simple.
+- Each microservice can start with external configuration per environment.
+- Audited/versioned configuration with simple rollback.
 
-**Aprendizaje**: configuración distribuida, perfiles, operación por ambiente.
-
+**Learning**: distributed configuration, profiles, per-environment operations.

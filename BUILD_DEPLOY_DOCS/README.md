@@ -1,41 +1,41 @@
-# Documentación de compilación y despliegue — hogwarts-backend
+# Build and deployment documentation — hogwarts-backend
 
-Este es el archivo base: explica cómo interactúan entre sí los archivos y carpetas de build/deploy del proyecto, y en qué orden se ejecuta el pipeline completo — desde compilar en local hasta desplegar cada microservicio en la nube. Los detalles de cada archivo individual están en los documentos numerados listados al final.
+This is the base file: it explains how the project's build/deploy files and folders interact with each other, and in what order the full pipeline runs — from building locally to deploying each microservice to the cloud. The details of each individual file are in the numbered documents listed at the end.
 
-> **Alcance de despliegue cloud**: esta documentación cubre el empaquetado en imagen de contenedor; el destino real de despliegue es **GKE**, documentado en [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/). Los manifiestos de Kubernetes se documentan ahí como archivos de infraestructura fuera del repo (no se agregan al código fuente).
+> **Cloud deployment scope**: this documentation covers packaging into a container image; the actual deployment target is **GKE**, documented in [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/). The Kubernetes manifests are documented there as infrastructure files outside the repo (they are not added to the source code).
 
-## 1. Panorama general
+## 1. Overview
 
-`hogwarts-backend` es un proyecto Gradle **multi-módulo**: un `build.gradle`/`settings.gradle` raíz que define reglas comunes (Java 17, Checkstyle, Spotless, JaCoCo) y tres módulos independientes, cada uno una aplicación Spring Boot desplegable por separado:
+`hogwarts-backend` is a **multi-module** Gradle project: a root `build.gradle`/`settings.gradle` that defines common rules (Java 17, Checkstyle, Spotless, JaCoCo) and three independent modules, each a Spring Boot application that can be deployed separately:
 
-| Módulo | Puerto local | Base path API |
+| Module | Local port | API base path |
 |---|---|---|
 | `wizard-service` | 8080 | `/api/wizards` |
 | `inventory-service` | 8081 | `/api/inventory/{wands,potions,brooms}` |
 | `duel-service` | 8082 | `/api/duels` |
 
-El flujo completo tiene dos grandes fases, en este orden:
+The full flow has two major phases, in this order:
 
-1. **Compilar y ejecutar en local** (siempre primero — es el gate de calidad antes de empaquetar nada).
-2. **Empaquetar en imagen de contenedor y desplegar a GKE** (GCP).
+1. **Build and run locally** (always first — it is the quality gate before packaging anything).
+2. **Package into a container image and deploy to GKE** (GCP).
 
-## 2. Fase local: compilar y verificar calidad
+## 2. Local phase: build and check quality
 
-Todo pasa por el [Gradle Wrapper](01_gradle_wrapper.md), que lee [`settings.gradle`](03_settings_gradle.md) (topología de módulos) y [`build.gradle`](02_root_build_gradle.md) (reglas comunes: Java 17, [Checkstyle](04_checkstyle.md), Spotless, JaCoCo).
+Everything goes through the [Gradle Wrapper](01_gradle_wrapper.md), which reads [`settings.gradle`](03_settings_gradle.md) (module topology) and [`build.gradle`](02_root_build_gradle.md) (common rules: Java 17, [Checkstyle](04_checkstyle.md), Spotless, JaCoCo).
 
 ```bash
-# Quality gate completo: formato + checkstyle + tests + cobertura ≥ 90%
+# Full quality gate: formatting + checkstyle + tests + coverage ≥ 90%
 ./gradlew check
 
-# Solo correr los tests de los tres módulos
+# Only run the tests of the three modules
 ./gradlew testAll
 ```
 
-`./gradlew check` es el comando que **debe pasar antes** de generar cualquier imagen de despliegue — es la garantía de que el código cumple las reglas de formateo (Spotless), documentación/estilo (Checkstyle) y cobertura mínima (90% de líneas, gate `jacocoRootCoverageVerification`) definidas en el `build.gradle` raíz.
+`./gradlew check` is the command that **must pass before** generating any deployment image — it guarantees that the code meets the formatting (Spotless), documentation/style (Checkstyle) and minimum coverage (90% of lines, `jacocoRootCoverageVerification` gate) rules defined in the root `build.gradle`.
 
-## 3. Fase local: ejecutar cada servicio
+## 3. Local phase: run each service
 
-Como ningún `application.properties` fija `server.port`, cada servicio se levanta pasando el puerto explícitamente (ver [`../README.md`](../README.md) raíz):
+Since no `application.properties` sets `server.port`, each service is started by passing the port explicitly (see the root [`../README.md`](../README.md)):
 
 ```bash
 ./gradlew :wizard-service:bootRun --args="--server.port=8080"
@@ -43,19 +43,19 @@ Como ningún `application.properties` fija `server.port`, cada servicio se levan
 ./gradlew :duel-service:bootRun --args="--server.port=8082"
 ```
 
-En este punto los tres servicios corren en local, cada uno con su base H2 en memoria, listos para probarse con la colección Postman del repo (`Hogwarts_API.postman_collection.json`).
+At this point the three services run locally, each with its own in-memory H2 database, ready to be tested with the repo's Postman collection (`Hogwarts_API.postman_collection.json`).
 
-## 4. Fase de empaquetado: dos procesos separados
+## 4. Packaging phase: two separate processes
 
-A partir de aquí hay **dos formas independientes** de convertir el código en una imagen de contenedor lista para desplegar. El proyecto documenta y usa realmente la primera; la segunda existe como `Dockerfile` educativo en cada servicio.
+From here there are **two independent ways** to turn the code into a container image ready to deploy. The project documents and actually uses the first one; the second exists as an educational `Dockerfile` in each service.
 
-### 4.a. Cloud Native Buildpacks (flujo real usado en este repo)
+### 4.a. Cloud Native Buildpacks (the actual flow used in this repo)
 
-Documentado en detalle en [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md). No requiere ningún `Dockerfile` ni `project.toml` en el repo — Cloud Build detecta automáticamente que es un proyecto Gradle/Java y construye la imagen.
+Documented in detail in [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md). It requires no `Dockerfile` or `project.toml` in the repo — Cloud Build automatically detects that it is a Gradle/Java project and builds the image.
 
-Punto clave: **se ejecuta desde dentro de la carpeta de cada servicio**, no desde la raíz, porque cada módulo tiene su propio `build.gradle` y buildpacks necesita ver un proyecto Gradle "aislado". Por eso el `build.gradle` de cada servicio es autocontenido y no usa el catálogo de versiones del root (ver [`02_root_build_gradle.md`](02_root_build_gradle.md#catálogo-de-versiones-gradlelibsversionstoml)).
+Key point: **it runs from inside each service's folder**, not from the root, because each module has its own `build.gradle` and buildpacks needs to see an "isolated" Gradle project. That is why each service's `build.gradle` is self-contained and does not use the root's version catalog (see [`02_root_build_gradle.md`](02_root_build_gradle.md#version-catalog-gradlelibsversionstoml)).
 
-El ejemplo publica sin tag (`:latest`) para simplificar. Para publicar de verdad, la imagen lleva como tag la **versión semántica** del servicio, leída de su `gradle.properties` (ver la sección 5):
+The example publishes without a tag (`:latest`) for simplicity. To publish for real, the image is tagged with the service's **semantic version**, read from its `gradle.properties` (see section 5):
 
 ```bash
 export PROJECT_ID="hogwarts-dev-123"
@@ -70,66 +70,66 @@ gcloud builds submit --pack image="$WIZARD_IMAGE:$WIZARD_VERSION"
 cd ..
 ```
 
-Se repite igual para `inventory-service` y `duel-service`, cambiando la carpeta y el nombre de imagen (ver [`08_inventory_service.md`](08_inventory_service.md), [`09_duel_service.md`](09_duel_service.md)).
+It is repeated the same way for `inventory-service` and `duel-service`, changing the folder and the image name (see [`08_inventory_service.md`](08_inventory_service.md), [`09_duel_service.md`](09_duel_service.md)).
 
-### 4.b. Dockerfile manual (uso educativo)
+### 4.b. Manual Dockerfile (educational use)
 
-Documentado en [`07_wizard_service.md`](07_wizard_service.md). Es un build multi-stage (`eclipse-temurin:17-jdk-jammy` para compilar → `eclipse-temurin:17-jre-jammy` para runtime) que replica manualmente lo que Buildpacks hace por detrás. Punto clave, opuesto al anterior: **se ejecuta desde la raíz del repo**, porque necesita ver el wrapper y el `settings.gradle`/`build.gradle` raíz para resolver el build multi-módulo:
+Documented in [`07_wizard_service.md`](07_wizard_service.md). It is a multi-stage build (`eclipse-temurin:17-jdk-jammy` to compile → `eclipse-temurin:17-jre-jammy` for the runtime) that manually replicates what Buildpacks does behind the scenes. Key point, the opposite of the previous one: **it runs from the repo root**, because it needs to see the wrapper and the root `settings.gradle`/`build.gradle` to resolve the multi-module build:
 
 ```bash
 docker build -f wizard-service/Dockerfile -t wizard-service:local .
 docker run -p 8080:8080 wizard-service:local
 ```
 
-`inventory-service` y `duel-service` tienen su propio `Dockerfile` con el mismo patrón, cambiando solo el módulo objetivo (ver [`08_inventory_service.md`](08_inventory_service.md) y [`09_duel_service.md`](09_duel_service.md)).
+`inventory-service` and `duel-service` have their own `Dockerfile` with the same pattern, changing only the target module (see [`08_inventory_service.md`](08_inventory_service.md) and [`09_duel_service.md`](09_duel_service.md)).
 
-### 4.c. Comparación
+### 4.c. Comparison
 
 | | Buildpacks (`gcloud builds submit --pack`) | Dockerfile (`docker build`) |
 |---|---|---|
-| Archivo de configuración en el repo | Ninguno | `Dockerfile` por servicio |
-| Directorio de ejecución | Dentro de cada `*-service/` | Raíz del repo |
-| Dónde compila | Infraestructura administrada de Cloud Build | Localmente, en el daemon de Docker |
-| Quién decide la imagen base / capas | El buildpack de Java/Gradle (Google Cloud Buildpacks) | El propio `Dockerfile`, explícito y auditable |
-| Uso en este proyecto | Flujo real de despliegue a GKE | Solo referencia/aprendizaje |
+| Configuration file in the repo | None | One `Dockerfile` per service |
+| Working directory | Inside each `*-service/` | Repo root |
+| Where it compiles | Cloud Build managed infrastructure | Locally, on the Docker daemon |
+| Who decides the base image / layers | The Java/Gradle buildpack (Google Cloud Buildpacks) | The `Dockerfile` itself, explicit and auditable |
+| Use in this project | Actual deployment flow to GKE | Reference/learning only |
 
-## 5. Fase de despliegue: GKE
+## 5. Deployment phase: GKE
 
-Documentado en detalle en [`../GKE_GCP_DEPLOYMENT/04_gke_microservices.md`](../GKE_GCP_DEPLOYMENT/04_gke_microservices.md). Una vez publicada la imagen en Artifact Registry (paso 4), se despliega como un `Deployment` + `Service` de Kubernetes independiente por microservicio:
+Documented in detail in [`../GKE_GCP_DEPLOYMENT/04_gke_microservices.md`](../GKE_GCP_DEPLOYMENT/04_gke_microservices.md). Once the image is published to Artifact Registry (step 4), it is deployed as an independent Kubernetes `Deployment` + `Service` per microservice:
 
 ```bash
 kubectl apply -f wizard-service.yaml
 ```
 
-Notas relevantes:
-- El manifiesto `Deployment` fija `containerPort: 8080`; Spring Boot escucha en `8080` por defecto, por lo que normalmente **no hace falta cambiar nada** en el código para que coincida — esto también es lo que documenta el `EXPOSE 8080` de los `Dockerfile`.
-- El repositorio de imágenes es `hogwarts-docker` en Artifact Registry, con URIs del tipo `REGION-docker.pkg.dev/PROJECT_ID/hogwarts-docker/<service>:<versión>`.
-- **Versionado de imágenes**: cada servicio tiene su versión semántica (`MAJOR.MINOR.PATCH`) en su propio `gradle.properties`, independiente de los demás. Esa versión es el tag de la imagen, y el `Deployment` de GKE referencia ese tag, nunca `:latest`. Reglas, tags y flujo de release en [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md) §4.
-- Variables de entorno reutilizables para todo el flujo están centralizadas en [`../GKE_GCP_DEPLOYMENT/env-vars.sh`](../GKE_GCP_DEPLOYMENT/env-vars.sh).
-- La guía completa de GCP (cuenta, proyecto, Cloud SQL, seguridad con Identity Platform, Secret Manager, observabilidad, checklist de producción) vive en [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/) — esta documentación no la duplica, solo referencia los pasos de build/deploy que involucran directamente los archivos listados en la sección 6.
+Relevant notes:
+- The `Deployment` manifest sets `containerPort: 8080`; Spring Boot listens on `8080` by default, so normally **nothing needs to change** in the code to match — this is also what the `EXPOSE 8080` of the `Dockerfile`s documents.
+- The image repository is `hogwarts-docker` in Artifact Registry, with URIs like `REGION-docker.pkg.dev/PROJECT_ID/hogwarts-docker/<service>:<version>`.
+- **Image versioning**: each service has its own semantic version (`MAJOR.MINOR.PATCH`) in its own `gradle.properties`, independent of the others. That version is the image tag, and the GKE `Deployment` references that tag, never `:latest`. Rules, tags and the release flow are in [`../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`](../GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md) §4.
+- Reusable environment variables for the whole flow are centralized in [`../GKE_GCP_DEPLOYMENT/env-vars.sh`](../GKE_GCP_DEPLOYMENT/env-vars.sh).
+- The full GCP guide (account, project, Cloud SQL, security with Identity Platform, Secret Manager, observability, production checklist) lives in [`../GKE_GCP_DEPLOYMENT/`](../GKE_GCP_DEPLOYMENT/) — this documentation does not duplicate it; it only references the build/deploy steps that directly involve the files listed in section 7.
 
-## 6. Diagrama del flujo completo
+## 6. Full flow diagram
 
 ```mermaid
 flowchart TD
-    A[Código fuente] --> B["./gradlew check<br/>(spotless + checkstyle + tests + cobertura 90%)"]
-    B --> C{Empaquetado}
-    C -->|Buildpacks<br/>desde cada *-service/| D["gcloud builds submit --pack<br/>(sin Dockerfile)"]
-    C -->|Dockerfile<br/>desde la raíz| E["docker build -f &lt;servicio&gt;/Dockerfile ."]
-    D --> F["Imagen en Artifact Registry<br/>hogwarts-docker<br/>(tag = versión de gradle.properties)"]
+    A[Source code] --> B["./gradlew check<br/>(spotless + checkstyle + tests + 90% coverage)"]
+    B --> C{Packaging}
+    C -->|Buildpacks<br/>from each *-service/| D["gcloud builds submit --pack<br/>(no Dockerfile)"]
+    C -->|Dockerfile<br/>from the root| E["docker build -f &lt;service&gt;/Dockerfile ."]
+    D --> F["Image in Artifact Registry<br/>hogwarts-docker<br/>(tag = version from gradle.properties)"]
     E --> F
-    F --> G["kubectl apply<br/>Deployment+Service por microservicio en GKE"]
+    F --> G["kubectl apply<br/>Deployment+Service per microservice on GKE"]
     G --> H[wizard-service]
     G --> I[inventory-service]
     G --> J[duel-service]
 ```
 
-## 7. Índice de archivos documentados
+## 7. Index of documented files
 
-| Archivo | Contenido |
+| File | Content |
 |---|---|
 | [`01_gradle_wrapper.md`](01_gradle_wrapper.md) | `gradlew`, `gradlew.bat`, `gradle-wrapper.jar`, `gradle-wrapper.properties` |
-| [`02_root_build_gradle.md`](02_root_build_gradle.md) | `build.gradle` raíz, `gradle/libs.versions.toml`, versión por servicio |
+| [`02_root_build_gradle.md`](02_root_build_gradle.md) | Root `build.gradle`, `gradle/libs.versions.toml`, per-service version |
 | [`03_settings_gradle.md`](03_settings_gradle.md) | `settings.gradle` |
 | [`04_checkstyle.md`](04_checkstyle.md) | `config/checkstyle/checkstyle.xml`, `config/checkstyle/suppressions.xml` |
 | [`05_hogwarts_iml.md`](05_hogwarts_iml.md) | `hogwarts.iml` |
@@ -137,5 +137,5 @@ flowchart TD
 | [`07_wizard_service.md`](07_wizard_service.md) | `wizard-service/build.gradle`, `wizard-service/gradle.properties`, `wizard-service/Dockerfile` |
 | [`08_inventory_service.md`](08_inventory_service.md) | `inventory-service/build.gradle`, `inventory-service/gradle.properties`, `inventory-service/Dockerfile` |
 | [`09_duel_service.md`](09_duel_service.md) | `duel-service/build.gradle`, `duel-service/gradle.properties`, `duel-service/Dockerfile` |
-| [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md) | `gradlew`, `gradle-wrapper.properties`, `settings.gradle` — comparación `bootRun` vs botón Run de IntelliJ |
-| [`11_local_container_image.md`](11_local_container_image.md) | `wizard-service/Dockerfile` — qué es una imagen de contenedor y cómo construirla/correrla en local |
+| [`10_bootrun_vs_ide_execution.md`](10_bootrun_vs_ide_execution.md) | `gradlew`, `gradle-wrapper.properties`, `settings.gradle` — `bootRun` vs IntelliJ's Run button |
+| [`11_local_container_image.md`](11_local_container_image.md) | `wizard-service/Dockerfile` — what a container image is and how to build/run it locally |

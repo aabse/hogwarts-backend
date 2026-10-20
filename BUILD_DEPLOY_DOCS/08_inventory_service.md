@@ -1,12 +1,12 @@
-# `inventory-service`: `build.gradle` y `Dockerfile`
+# `inventory-service`: `build.gradle` and `Dockerfile`
 
-Archivos cubiertos:
+Files covered:
 
 - [`inventory-service/build.gradle`](../inventory-service/build.gradle)
 - [`inventory-service/gradle.properties`](../inventory-service/gradle.properties)
 - [`inventory-service/Dockerfile`](../inventory-service/Dockerfile)
 
-**Función del servicio**: gestiona el inventario mágico — varas (`wands`), pociones (`potions`) y escobas (`brooms`), cada uno con su propio controller/service/repository, más una operación para asignar una vara a un wizard (`/api/inventory/wands`, `/api/inventory/potions`, `/api/inventory/brooms`, `POST /api/inventory/wands/{id}/assign`).
+**What the service does**: it manages the magical inventory — wands, potions and brooms, each with its own controller/service/repository, plus an operation to assign a wand to a wizard (`/api/inventory/wands`, `/api/inventory/potions`, `/api/inventory/brooms`, `POST /api/inventory/wands/{id}/assign`).
 
 ## `build.gradle`
 
@@ -17,8 +17,8 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
-// Se repite aqui (aunque el root ya lo define) para que el modulo compile aislado:
-// el build con buildpacks sube solo esta carpeta a Cloud Build.
+// Repeated here (even though the root defines it) so the module builds in isolation:
+// the buildpacks build uploads only this folder to Cloud Build.
 repositories {
     mavenCentral()
 }
@@ -33,7 +33,7 @@ dependencies {
 
     runtimeOnly 'com.h2database:h2'
 
-    // Cloud SQL Java Connector (perfil "gcp")
+    // Cloud SQL Java Connector ("gcp" profile)
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'com.google.cloud.sql:postgres-socket-factory:1.28.1'
 
@@ -48,29 +48,29 @@ tasks.named('test') {
 }
 ```
 
-Es prácticamente idéntico al de [`wizard-service`](07_wizard_service.md): mismo Spring Boot 4.0.1, mismas dependencias base (`data-jpa`, `webmvc`, `validation`, Lombok, H2 en runtime, PostgreSQL + conector de Cloud SQL para el perfil `gcp`, mismo set de dependencias de test). Como los otros módulos:
+It is practically identical to [`wizard-service`](07_wizard_service.md)'s: same Spring Boot 4.0.1, same base dependencies (`data-jpa`, `webmvc`, `validation`, Lombok, H2 at runtime, PostgreSQL + the Cloud SQL connector for the `gcp` profile, same set of test dependencies). Like the other modules:
 
-- **Autocontenido a propósito**: declara las versiones de sus plugins y dependencias y su propio `repositories { mavenCentral() }`, aunque el root ya lo define. Así compila aunque Cloud Build reciba solo esta carpeta (build con Buildpacks). Por la misma razón no usa el catálogo `gradle/libs.versions.toml` del root.
-- **Versión propia** en [`inventory-service/gradle.properties`](../inventory-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): es el nombre del jar y el tag de su imagen, y se incrementa con versionado semántico independiente de los otros servicios (ver [`02_root_build_gradle.md`](02_root_build_gradle.md#versión-de-cada-servicio) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4).
-- Hereda del [`build.gradle` raíz](02_root_build_gradle.md) el `group`, el toolchain de Java 17 y Checkstyle/Spotless/JaCoCo.
+- **Self-contained on purpose**: it declares the versions of its plugins and dependencies and its own `repositories { mavenCentral() }`, even though the root already defines it. That way it compiles even when Cloud Build receives only this folder (Buildpacks build). For the same reason it does not use the root's `gradle/libs.versions.toml` catalog.
+- **Its own version** in [`inventory-service/gradle.properties`](../inventory-service/gradle.properties) (`version=0.0.1-SNAPSHOT`): it is the jar name and its image tag, and it is incremented with semantic versioning independently of the other services (see [`02_root_build_gradle.md`](02_root_build_gradle.md#version-of-each-service) and `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md` §4).
+- It inherits from the [root `build.gradle`](02_root_build_gradle.md) the `group`, the Java 17 toolchain and Checkstyle/Spotless/JaCoCo.
 
-**Única diferencia relevante frente a `wizard-service`/`duel-service`**: **no incluye** `spring-retry` ni `spring-aspects`. Esto es coherente con que `inventory-service` no expone (por ahora) ninguna operación con manejo explícito de reintentos por bloqueo optimista — a diferencia del "ataque" de wizards o la creación de duelos, la asignación de varas no requiere ese mecanismo.
+**The only relevant difference from `wizard-service`/`duel-service`**: it **does not include** `spring-retry` or `spring-aspects`. This is consistent with the fact that `inventory-service` does not (yet) expose any operation with explicit retry handling for optimistic locking — unlike the wizard "attack" or duel creation, assigning wands does not need that mechanism.
 
 ## `Dockerfile`
 
 ```dockerfile
-# Dockerfile educativo — no usado por el flujo de despliegue documentado en
-# GKE_GCP_DEPLOYMENT (que usa Cloud Build + buildpacks). Sirve para comparar
-# manualmente los mismos pasos que un buildpack hace por vos.
+# Educational Dockerfile — not used by the deployment flow documented in
+# GKE_GCP_DEPLOYMENT (which uses Cloud Build + buildpacks). It lets you compare,
+# step by step, what a buildpack does for you.
 #
-# El build context debe ser la RAIZ del repo (no esta carpeta), porque este
-# modulo es parte de un build multi-proyecto Gradle y necesita el wrapper y
-# el settings.gradle de la raiz:
+# The build context must be the repo ROOT (not this folder), because this
+# module is part of a Gradle multi-project build and needs the root wrapper
+# and settings.gradle:
 #
 #   docker build -f inventory-service/Dockerfile -t inventory-service:local .
 #   docker run -p 8080:8080 inventory-service:local
 
-# --- Etapa 1: compilar el jar con Gradle ---
+# --- Stage 1: build the jar with Gradle ---
 FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /workspace
 
@@ -84,7 +84,7 @@ COPY duel-service duel-service
 RUN chmod +x gradlew
 RUN ./gradlew :inventory-service:bootJar -x test -x checkstyleMain -x checkstyleTest -x spotlessCheck --no-daemon
 
-# --- Etapa 2: imagen de runtime, liviana (solo JRE) ---
+# --- Stage 2: lightweight runtime image (JRE only) ---
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY --from=build /workspace/inventory-service/build/libs/*.jar app.jar
@@ -92,10 +92,10 @@ EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
-Sigue el mismo patrón multi-stage que [`wizard-service/Dockerfile`](07_wizard_service.md#dockerfile) (explicado en detalle ahí). Solo cambian la tarea de Gradle (`:inventory-service:bootJar`) y la ruta del jar copiado (`inventory-service/build/libs/*.jar`). El build context sigue siendo la raíz del repo por la misma razón (build multi-módulo):
+It follows the same multi-stage pattern as [`wizard-service/Dockerfile`](07_wizard_service.md#dockerfile) (explained in detail there). Only the Gradle task (`:inventory-service:bootJar`) and the path of the copied jar (`inventory-service/build/libs/*.jar`) change. The build context is still the repo root for the same reason (multi-module build):
 
 ```bash
 docker build -f inventory-service/Dockerfile -t inventory-service:local .
 ```
 
-Como el de `wizard-service`, es **educativo**: el flujo de despliegue documentado (GKE + Buildpacks, ver [`README.md`](README.md) y `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) construye la imagen directamente desde `inventory-service/` con `gcloud builds submit --pack`, sin usar este archivo. En los dos caminos, la imagen se publica con la versión de `inventory-service/gradle.properties` como tag (guía 03 §4.7).
+Like `wizard-service`'s, it is **educational**: the documented deployment flow (GKE + Buildpacks, see [`README.md`](README.md) and `GKE_GCP_DEPLOYMENT/03_artifact_registry_and_builds.md`) builds the image directly from `inventory-service/` with `gcloud builds submit --pack`, without using this file. In both paths, the image is published with the version from `inventory-service/gradle.properties` as its tag (guide 03 §4.7).
