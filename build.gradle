@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'jacoco'
-    id 'com.diffplug.spotless' version '8.1.0' apply false
+    alias(libs.plugins.spotless) apply false
 }
 
 group = 'com.magic'
@@ -19,7 +19,7 @@ repositories {
 }
 
 jacoco {
-    toolVersion = '0.8.12'
+    toolVersion = libs.versions.jacoco.get()
 }
 
 subprojects {
@@ -29,7 +29,10 @@ subprojects {
     apply plugin: 'jacoco'
 
     group = rootProject.group
-    version = rootProject.version
+    // Each service defines its version in its gradle.properties; otherwise it inherits the root's.
+    if (version.toString() == 'unspecified') {
+        version = rootProject.version
+    }
 
     java {
         toolchain {
@@ -42,11 +45,11 @@ subprojects {
     }
 
     jacoco {
-        toolVersion = '0.8.12'
+        toolVersion = libs.versions.jacoco.get()
     }
 
     checkstyle {
-        toolVersion = '12.3.1'
+        toolVersion = libs.versions.checkstyle.get()
         configFile = rootProject.file('config/checkstyle/checkstyle.xml')
         configProperties = [
                 'checkstyle.suppressions.file': rootProject.file('config/checkstyle/suppressions.xml').absolutePath

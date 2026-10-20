@@ -122,3 +122,19 @@ Verify the gate explicitly:
 ```bash
 ./gradlew jacocoRootCoverageVerification
 ```
+
+## GCP profile (`gcp`)
+
+With `--spring.profiles.active=gcp` each service connects to Cloud SQL (PostgreSQL) through the Cloud SQL Java Connector. Credentials are **not** stored in the repo; provide them as environment variables:
+
+| Variable | Required | Description |
+|---|---|---|
+| `DB_PASSWORD` | yes | Database user password |
+| `INSTANCE_CONNECTION_NAME` | yes | `project:region:instance` |
+| `DB_USER` | no | Defaults to `<service>_user` |
+
+## Documentation
+
+- [`GKE_GCP_DEPLOYMENT/`](GKE_GCP_DEPLOYMENT/README.md): step-by-step deployment guides for GKE/GCP (Artifact Registry, Cloud SQL, Secret Manager, Identity Platform, observability).
+- [`BUILD_DEPLOY_DOCS/`](BUILD_DEPLOY_DOCS/README.md): build setup (Gradle wrapper, Checkstyle, per-service modules, container images).
+- [`DEPENDENCIES.md`](DEPENDENCIES.md), [`DTOs.md`](DTOs.md), [`SPECIFICATIONS_SPRING.md`](SPECIFICATIONS_SPRING.md), [`ADVANCED_ROADMAP.md`](ADVANCED_ROADMAP.md)

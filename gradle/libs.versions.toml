@@ -1,0 +1,10 @@
+# Versions of the root build tools (quality and coverage).
+# Spring Boot and each service's dependencies do NOT go here: every service build.gradle
+# must build in isolation, because the buildpacks build uploads only the service folder.
+[versions]
+spotless = "8.1.0"
+jacoco = "0.8.12"
+checkstyle = "12.3.1"
+
+[plugins]
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
