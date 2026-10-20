@@ -29,7 +29,7 @@ subprojects {
     apply plugin: 'jacoco'
 
     group = rootProject.group
-    // Cada servicio define su version en su gradle.properties; si no la define, hereda la del root.
+    // Each service defines its version in its gradle.properties; otherwise it inherits the root's.
     if (version.toString() == 'unspecified') {
         version = rootProject.version
     }

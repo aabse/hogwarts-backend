@@ -4,8 +4,8 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
-// Se repite aqui (aunque el root ya lo define) para que el modulo compile aislado:
-// el build con buildpacks sube solo esta carpeta a Cloud Build.
+// Repeated here (even though the root defines it) so the module builds in isolation:
+// the buildpacks build uploads only this folder to Cloud Build.
 repositories {
     mavenCentral()
 }

@@ -1,15 +1,15 @@
-# Dockerfile educativo — no usado por el flujo de despliegue documentado en
-# GKE_GCP_DEPLOYMENT (que usa Cloud Build + buildpacks). Sirve para comparar
-# manualmente los mismos pasos que un buildpack hace por vos.
+# Educational Dockerfile — not used by the deployment flow documented in
+# GKE_GCP_DEPLOYMENT (which uses Cloud Build + buildpacks). It lets you compare,
+# step by step, what a buildpack does for you.
 #
-# El build context debe ser la RAIZ del repo (no esta carpeta), porque este
-# modulo es parte de un build multi-proyecto Gradle y necesita el wrapper y
-# el settings.gradle de la raiz:
+# The build context must be the repo ROOT (not this folder), because this
+# module is part of a Gradle multi-project build and needs the root wrapper
+# and settings.gradle:
 #
 #   docker build -f wizard-service/Dockerfile -t wizard-service:local .
 #   docker run -p 8080:8080 wizard-service:local
 
-# --- Etapa 1: compilar el jar con Gradle ---
+# --- Stage 1: build the jar with Gradle ---
 FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /workspace
 
@@ -23,7 +23,7 @@ COPY duel-service duel-service
 RUN chmod +x gradlew
 RUN ./gradlew :wizard-service:bootJar -x test -x checkstyleMain -x checkstyleTest -x spotlessCheck --no-daemon
 
-# --- Etapa 2: imagen de runtime, liviana (solo JRE) ---
+# --- Stage 2: lightweight runtime image (JRE only) ---
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY --from=build /workspace/wizard-service/build/libs/*.jar app.jar

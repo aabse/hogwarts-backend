@@ -299,7 +299,7 @@ public class WizardService {
     dto.setHouse(w.getHouse());
     dto.setLevel(w.getLevel());
 
-    // Boundary: sin wands-service, no resolvemos descripción aquí
+    // Boundary: without wands-service, the wand description is not resolved here
     dto.setWandDescription(w.getWandId() != null ? "Wand assigned" : "No wand assigned");
     return dto;
   }

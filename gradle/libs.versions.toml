@@ -1,6 +1,6 @@
-# Versiones de las herramientas de build del root (calidad y cobertura).
-# Spring Boot y las dependencias de cada servicio NO van aqui: cada build.gradle de servicio
-# debe compilar aislado, porque el build con buildpacks sube solo la carpeta del servicio.
+# Versions of the root build tools (quality and coverage).
+# Spring Boot and each service's dependencies do NOT go here: every service build.gradle
+# must build in isolation, because the buildpacks build uploads only the service folder.
 [versions]
 spotless = "8.1.0"
 jacoco = "0.8.12"

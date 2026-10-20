@@ -9,9 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 /**
- * Configura el {@link DataSource} de PostgreSQL en Cloud SQL usando el Cloud SQL Java Connector
- * (JDBC Socket Factory). Activa solo bajo el perfil {@code gcp}; sin ese perfil, Spring Boot sigue
- * autoconfigurando H2 como hasta ahora.
+ * Configures the PostgreSQL {@link DataSource} on Cloud SQL using the Cloud SQL Java Connector
+ * (JDBC Socket Factory). Active only under the {@code gcp} profile; without it, Spring Boot keeps
+ * auto-configuring H2 as before.
  *
  * @since 1.0
  */
@@ -19,30 +19,30 @@ import org.springframework.context.annotation.Profile;
 @Profile("gcp")
 public class CloudSqlDataSourceConfig {
 
-  /** Usuario de la base de datos ({@code hogwarts.datasource.cloud-sql.username}). */
+  /** Database user ({@code hogwarts.datasource.cloud-sql.username}). */
   @Value("${hogwarts.datasource.cloud-sql.username}")
   private String username;
 
-  /** Password del usuario ({@code hogwarts.datasource.cloud-sql.password}). */
+  /** Database user password ({@code hogwarts.datasource.cloud-sql.password}). */
   @Value("${hogwarts.datasource.cloud-sql.password}")
   private String password;
 
-  /** Nombre de la base de datos ({@code hogwarts.datasource.cloud-sql.db-name}). */
+  /** Database name ({@code hogwarts.datasource.cloud-sql.db-name}). */
   @Value("${hogwarts.datasource.cloud-sql.db-name}")
   private String dbName;
 
   /**
-   * Nombre de conexión de la instancia de Cloud SQL, formato {@code PROJECT_ID:REGION:INSTANCE_ID}
-   * ({@code hogwarts.datasource.cloud-sql.instance-connection-name}).
+   * Cloud SQL instance connection name, in {@code PROJECT_ID:REGION:INSTANCE_ID} format ({@code
+   * hogwarts.datasource.cloud-sql.instance-connection-name}).
    */
   @Value("${hogwarts.datasource.cloud-sql.instance-connection-name}")
   private String instanceConnectionName;
 
   /**
-   * Crea el {@link DataSource} que se conecta a Cloud SQL mediante el socket factory de PostgreSQL,
-   * usando los valores leídos de las properties de este perfil.
+   * Creates the {@link DataSource} that connects to Cloud SQL through the PostgreSQL socket
+   * factory, using the values read from this profile's properties.
    *
-   * @return un {@link HikariDataSource} configurado con el Cloud SQL Java Connector
+   * @return a {@link HikariDataSource} configured with the Cloud SQL Java Connector
    */
   @Bean
   public DataSource dataSource() {
