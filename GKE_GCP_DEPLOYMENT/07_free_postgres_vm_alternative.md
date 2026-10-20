@@ -1,34 +1,34 @@
-## 07 — Alternativa gratuita a Cloud SQL: PostgreSQL self-hosted en una VM Always Free
+## 07 — Free alternative to Cloud SQL: self-hosted PostgreSQL on an Always Free VM
 
-### Objetivo
+### Goal
 
-Documentar cómo tener una base de datos PostgreSQL "real" (no H2 en memoria) **sin costo**, corriendo en una VM `e2-micro` de Compute Engine dentro del **Always Free tier** de GCP — como alternativa a [`06_cloud_sql_database.md`](06_cloud_sql_database.md) para cuando el presupuesto es literalmente cero, no solo bajo.
+Document how to run a "real" PostgreSQL database (not in-memory H2) **at no cost**, on a Compute Engine `e2-micro` VM within GCP's **Always Free tier** — as an alternative to [`06_cloud_sql_database.md`](06_cloud_sql_database.md) for when the budget is literally zero, not just low.
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía describe pasos en GCP y configuración de la VM. **No modifica el código del repositorio.**
-- Los "ajustes en código" (sección 7) se describen como **instrucciones** para que tú los apliques si corresponde — mismo criterio que el resto de `GKE_GCP_DEPLOYMENT/` (ver [`README.md`](README.md)).
-- **Esta opción no es apta para producción real.** Es la contraparte "sin presupuesto" de la Opción Básica de Cloud SQL: sin SLA, sin alta disponibilidad, sin backups automáticos, con mantenimiento del sistema operativo y de PostgreSQL a tu cargo. Úsala para dev/pruebas/demos personales, no para datos reales de usuarios.
+- This guide describes steps in GCP and the VM configuration. **It does not modify the repository code.**
+- The "code changes" (section 7) are described as **instructions** for you to apply if appropriate — same criterion as the rest of `GKE_GCP_DEPLOYMENT/` (see [`README.md`](README.md)).
+- **This option is not suitable for real production.** It is the "no budget" counterpart of Cloud SQL's Basic Option: no SLA, no high availability, no automatic backups, and you are responsible for maintaining the operating system and PostgreSQL. Use it for personal dev/testing/demos, not for real user data.
 
 ---
 
-## 0) Por qué es gratis, y qué límites tiene el Always Free tier
+## 0) Why it is free, and the limits of the Always Free tier
 
-Compute Engine incluye, de forma permanente (no es una prueba de 30/90 días como la de Cloud SQL):
+Compute Engine includes, permanently (it is not a 30/90-day trial like Cloud SQL's):
 
-- **1 instancia `e2-micro` no-preemptible por mes**, únicamente si corre en una de estas regiones: `us-west1` (Oregon), `us-central1` (Iowa) o `us-east1` (Carolina del Sur). Usaremos `us-central1`, que ya es la región (`REGION`) usada en el resto de esta guía y en el cluster GKE.
-- **2 vCPU compartidas** (1/8 de un core físico) y **1 GB de RAM** — suficiente para Postgres + un par de microservicios livianos en dev, no para carga real.
-- **30 GB-mes de disco persistente estándar (HDD, `pd-standard`)** gratis — un disco SSD (`pd-ssd`) sí generaría costo.
-- **1 GB de salida de red (egress) por mes** desde Norteamérica. Esta cuota es muy chica: el tráfico real entre los Pods de GKE y esta VM probablemente la supere rápido, generando cargos pequeños de egress (no de la instancia en sí).
+- **1 non-preemptible `e2-micro` instance per month**, only if it runs in one of these regions: `us-west1` (Oregon), `us-central1` (Iowa) or `us-east1` (South Carolina). We will use `us-central1`, which is already the region (`REGION`) used in the rest of this guide and by the GKE cluster.
+- **2 shared vCPUs** (1/8 of a physical core) and **1 GB of RAM** — enough for Postgres + a couple of lightweight microservices in dev, not for real load.
+- **30 GB-month of standard persistent disk (HDD, `pd-standard`)** for free — an SSD disk (`pd-ssd`) would incur charges.
+- **1 GB of network egress per month** from North America. This quota is very small: real traffic between the GKE Pods and this VM will probably exceed it quickly, generating small egress charges (not for the instance itself).
 
-**Lo que NO incluye** (a diferencia de Cloud SQL, incluso en su opción más básica):
+**What it does NOT include** (unlike Cloud SQL, even in its most basic option):
 
-- Backups automáticos — hay que scriptearlos vos mismo (sección 5).
-- Alta disponibilidad / failover — si la VM se cae, la base cae con ella.
-- Parches de seguridad del SO y de PostgreSQL — los aplicás vos.
-- SLA de ningún tipo.
+- Automatic backups — you have to script them yourself (section 5).
+- High availability / failover — if the VM goes down, the database goes down with it.
+- OS and PostgreSQL security patches — you apply them.
+- Any kind of SLA.
 
-En otras palabras: es gratis porque **vos asumís el rol que normalmente cumple Cloud SQL como servicio administrado**.
+In other words: it is free because **you take on the role that Cloud SQL normally plays as a managed service**.
 
 ---
 
@@ -39,20 +39,20 @@ export PROJECT_ID="hogwarts-backend-dev"
 export REGION="us-central1"
 export ZONE="us-central1-a"
 export VM_NAME="hogwarts-postgres-vm"
-export DB_PASSWORD_SUPERUSER="REEMPLAZA_ESTE_PASSWORD"
+export DB_PASSWORD_SUPERUSER="REPLACE_THIS_PASSWORD"
 ```
 
 ---
 
-## 2) Crear la VM `e2-micro`
+## 2) Create the `e2-micro` VM
 
-### 2.1 Habilitar la API de Compute Engine (si no lo hiciste)
+### 2.1 Enable the Compute Engine API (if you haven't already)
 
 ```bash
 gcloud services enable compute.googleapis.com
 ```
 
-### 2.2 Crear la instancia
+### 2.2 Create the instance
 
 ```bash
 gcloud compute instances create "$VM_NAME" \
@@ -66,16 +66,16 @@ gcloud compute instances create "$VM_NAME" \
   --tags=hogwarts-postgres
 ```
 
-Puntos clave para que se mantenga **dentro del Always Free tier**:
+Key points to stay **within the Always Free tier**:
 
-- `--machine-type=e2-micro` — es la única familia/tamaño elegible.
-- `--zone` debe caer en `us-west1`, `us-central1` o `us-east1`.
-- `--boot-disk-type=pd-standard` (HDD) — no `pd-ssd`/`pd-balanced`, que sí cobran.
-- `--boot-disk-size=30GB` — es el tope exacto del disco gratis; si lo subís, la porción excedente se cobra.
+- `--machine-type=e2-micro` — it is the only eligible family/size.
+- `--zone` must be in `us-west1`, `us-central1` or `us-east1`.
+- `--boot-disk-type=pd-standard` (HDD) — not `pd-ssd`/`pd-balanced`, which are charged.
+- `--boot-disk-size=30GB` — it is the exact free disk limit; if you go higher, the excess is charged.
 
-### 2.3 Reservar una IP externa estática
+### 2.3 Reserve a static external IP
 
-Por defecto, la IP externa es **efímera**: cambia si la VM se detiene y se vuelve a iniciar, lo que rompería la cadena de conexión (`spring.datasource.url`) cada vez. Reservarla como estática **no tiene costo adicional mientras esté asociada a una instancia en ejecución**:
+By default, the external IP is **ephemeral**: it changes if the VM is stopped and started again, which would break the connection string (`spring.datasource.url`) every time. Reserving it as static **costs nothing extra while it is attached to a running instance**:
 
 ```bash
 gcloud compute addresses create hogwarts-postgres-ip \
@@ -91,13 +91,13 @@ export VM_EXTERNAL_IP="$(gcloud compute addresses describe hogwarts-postgres-ip 
 echo "$VM_EXTERNAL_IP"
 ```
 
-⚠️ Si más adelante **eliminás la VM sin liberar la IP reservada**, esa IP sí empieza a cobrarse por estar "reservada pero no en uso". Liberala con `gcloud compute addresses delete hogwarts-postgres-ip --region="$REGION"` si dejás de usar esta opción.
+⚠️ If you later **delete the VM without releasing the reserved IP**, that IP starts being charged for being "reserved but not in use". Release it with `gcloud compute addresses delete hogwarts-postgres-ip --region="$REGION"` if you stop using this option.
 
 ---
 
-## 3) Firewall: exponer el puerto 5432
+## 3) Firewall: expose port 5432
 
-Los Pods de GKE no tienen una IP de salida fija por defecto (salvo que configures Cloud NAT con una IP reservada), así que la forma más simple (y la única realmente gratis, sin un conector VPC) de que los Pods lleguen a esta VM es exponer PostgreSQL a Internet, protegido por autenticación fuerte y SSL:
+GKE Pods have no fixed egress IP by default (unless you configure Cloud NAT with a reserved IP), so the simplest way (and the only truly free one, without a VPC connector) for the Pods to reach this VM is to expose PostgreSQL to the Internet, protected by strong authentication and SSL:
 
 ```bash
 gcloud compute firewall-rules create allow-postgres-hogwarts \
@@ -110,19 +110,19 @@ gcloud compute firewall-rules create allow-postgres-hogwarts \
   --target-tags=hogwarts-postgres
 ```
 
-⚠️ **Esta es la principal concesión de seguridad de esta guía.** `--source-ranges=0.0.0.0/0` significa que el puerto 5432 queda alcanzable desde cualquier IP de Internet, no solo desde los Pods del cluster. Ver sección 9 (recomendaciones mínimas) antes de usar esto con datos que te importen. La alternativa segura —una **VPC compartida / peering** entre la VPC del cluster GKE y la de la VM, para llegar por IP privada— implica más configuración de red, por eso no forma parte de esta guía "sin presupuesto".
+⚠️ **This is the main security trade-off of this guide.** `--source-ranges=0.0.0.0/0` means port 5432 is reachable from any IP on the Internet, not only from the cluster's Pods. See section 10 (minimum recommendations) before using this with data you care about. The secure alternative — a **shared VPC / peering** between the GKE cluster's VPC and the VM's, to connect over a private IP — involves more network configuration, which is why it is not part of this "no budget" guide.
 
 ---
 
-## 4) Instalar Docker y correr PostgreSQL dentro de la VM
+## 4) Install Docker and run PostgreSQL on the VM
 
-### 4.1 Conectarse por SSH
+### 4.1 Connect over SSH
 
 ```bash
 gcloud compute ssh "$VM_NAME" --zone="$ZONE"
 ```
 
-### 4.2 Instalar Docker (dentro de la VM)
+### 4.2 Install Docker (inside the VM)
 
 ```bash
 sudo apt-get update
@@ -130,24 +130,24 @@ sudo apt-get install -y docker.io
 sudo systemctl enable --now docker
 ```
 
-### 4.3 Levantar el contenedor de PostgreSQL
+### 4.3 Start the PostgreSQL container
 
 ```bash
 sudo docker run -d \
   --name hogwarts-postgres \
   --restart unless-stopped \
-  -e POSTGRES_PASSWORD="REEMPLAZA_ESTE_PASSWORD" \
+  -e POSTGRES_PASSWORD="REPLACE_THIS_PASSWORD" \
   -p 5432:5432 \
   -v pgdata:/var/lib/postgresql/data \
   postgres:15
 ```
 
-- `--restart unless-stopped`: si la VM se reinicia (por mantenimiento de Google o manualmente), el contenedor vuelve a levantarse solo.
-- `-v pgdata:/var/lib/postgresql/data`: volumen nombrado de Docker — los datos sobreviven a que el contenedor se recree, y quedan sobre el disco persistente de la VM (los mismos 30 GB del paso 2.2).
+- `--restart unless-stopped`: if the VM restarts (for Google maintenance or manually), the container comes back up by itself.
+- `-v pgdata:/var/lib/postgresql/data`: a named Docker volume — the data survives the container being recreated, and it lives on the VM's persistent disk (the same 30 GB from step 2.2).
 
-### 4.4 Crear las bases y usuarios (uno por microservicio)
+### 4.4 Create the databases and users (one per microservice)
 
-Mismo criterio que la Opción A de [`06_cloud_sql_database.md`](06_cloud_sql_database.md#11-una-instancia-vs-varias-instancias): una instancia, tres bases.
+Same criterion as Option A in [`06_cloud_sql_database.md`](06_cloud_sql_database.md#11-one-instance-vs-multiple-instances): one instance, three databases.
 
 ```bash
 sudo docker exec -it hogwarts-postgres psql -U postgres -c "
@@ -155,9 +155,9 @@ CREATE DATABASE wizard_db;
 CREATE DATABASE inventory_db;
 CREATE DATABASE duel_db;
 
-CREATE USER wizard_user WITH ENCRYPTED PASSWORD 'REEMPLAZA_ESTE_PASSWORD';
-CREATE USER inventory_user WITH ENCRYPTED PASSWORD 'REEMPLAZA_ESTE_PASSWORD';
-CREATE USER duel_user WITH ENCRYPTED PASSWORD 'REEMPLAZA_ESTE_PASSWORD';
+CREATE USER wizard_user WITH ENCRYPTED PASSWORD 'REPLACE_THIS_PASSWORD';
+CREATE USER inventory_user WITH ENCRYPTED PASSWORD 'REPLACE_THIS_PASSWORD';
+CREATE USER duel_user WITH ENCRYPTED PASSWORD 'REPLACE_THIS_PASSWORD';
 
 GRANT ALL PRIVILEGES ON DATABASE wizard_db TO wizard_user;
 GRANT ALL PRIVILEGES ON DATABASE inventory_db TO inventory_user;
@@ -165,48 +165,48 @@ GRANT ALL PRIVILEGES ON DATABASE duel_db TO duel_user;
 "
 ```
 
-Salí de la sesión SSH cuando termines (`exit`).
+Exit the SSH session when you are done (`exit`).
 
 ---
 
-## 5) Backups manuales (acá no hay backups automáticos)
+## 5) Manual backups (there are no automatic backups here)
 
-Como no existe el equivalente a los backups administrados de Cloud SQL, hay que scriptearlo. Ejemplo simple con `cron` dentro de la VM:
+Since there is no equivalent to Cloud SQL's managed backups, you have to script them. A simple example with `cron` inside the VM:
 
 ```bash
-# Dentro de la VM: agregar a crontab (crontab -e)
+# Inside the VM: add to crontab (crontab -e)
 0 3 * * * docker exec hogwarts-postgres pg_dumpall -U postgres > /home/$USER/backups/hogwarts-$(date +\%F).sql
 ```
 
-Alternativa a nivel de infraestructura (opcional, tiene un costo pequeño más allá del disco gratis): tomar snapshots del disco de la VM con `gcloud compute disks snapshot`.
+Infrastructure-level alternative (optional, with a small cost beyond the free disk): take snapshots of the VM's disk with `gcloud compute disks snapshot`.
 
 ---
 
-## 6) Verificar conectividad desde afuera
+## 6) Check connectivity from outside
 
 ```bash
-# Requiere el cliente psql instalado en tu máquina local
+# Requires the psql client installed on your local machine
 psql "host=$VM_EXTERNAL_IP port=5432 dbname=wizard_db user=wizard_user sslmode=prefer"
 ```
 
-Si responde el prompt de `psql`, la VM está aceptando conexiones externas.
+If you get the `psql` prompt, the VM is accepting external connections.
 
 ---
 
-## 7) Ajustes necesarios en la aplicación (solo instrucciones, sin modificar este repo)
+## 7) Required application changes (instructions only, without modifying this repo)
 
-Similar a la sección 6 de [`06_cloud_sql_database.md`](06_cloud_sql_database.md#6-ajustes-necesarios-en-la-aplicación-solo-instrucciones-sin-modificar-este-repo), pero con conexión JDBC TCP directa a la IP pública de la VM — acá no aplica el Cloud SQL Auth Proxy ni el Java Connector porque no hay una instancia de Cloud SQL, es un Postgres corriendo en una VM cualquiera.
+Similar to section 6 of [`06_cloud_sql_database.md`](06_cloud_sql_database.md#6-required-application-changes-instructions-only-without-modifying-this-repo), but with a direct TCP JDBC connection to the VM's public IP — neither the Cloud SQL Auth Proxy nor the Java Connector applies here because there is no Cloud SQL instance; it is Postgres running on an ordinary VM.
 
-### 7.1 Cambiar el driver runtime
+### 7.1 Change the runtime driver
 
-En el `build.gradle` de cada módulo (`wizard-service`, `inventory-service`, `duel-service`):
+In each module's `build.gradle` (`wizard-service`, `inventory-service`, `duel-service`):
 
-- Remover (o dejar solo para tests) `runtimeOnly 'com.h2database:h2'`.
-- Agregar `runtimeOnly 'org.postgresql:postgresql'`.
+- Remove (or keep only for tests) `runtimeOnly 'com.h2database:h2'`.
+- Add `runtimeOnly 'org.postgresql:postgresql'`.
 
-### 7.2 Configurar el datasource
+### 7.2 Configure the datasource
 
-En `application.properties` de cada servicio (ejemplo para `wizard-service`):
+In each service's `application.properties` (example for `wizard-service`):
 
 ```properties
 spring.datasource.url=jdbc:postgresql://${VM_EXTERNAL_IP}:5432/wizard_db?sslmode=prefer
@@ -215,53 +215,53 @@ spring.datasource.password=${WIZARD_DB_PASSWORD}
 spring.jpa.hibernate.ddl-auto=validate
 ```
 
-Repetir con `inventory_db`/`inventory_user` y `duel_db`/`duel_user` en los otros dos módulos. Los valores sensibles (`${VM_EXTERNAL_IP}`, `${WIZARD_DB_PASSWORD}`) se inyectan como variables de entorno o Secret Manager en el Pod de GKE — mismo mecanismo que la sección 5 y 8 de [`06_cloud_sql_database.md`](06_cloud_sql_database.md) y [`05_secret_manager_and_environment_config.md`](05_secret_manager_and_environment_config.md).
+Repeat with `inventory_db`/`inventory_user` and `duel_db`/`duel_user` in the other two modules. The sensitive values (`${VM_EXTERNAL_IP}`, `${WIZARD_DB_PASSWORD}`) are injected into the GKE Pod as environment variables or via Secret Manager — the same mechanism as sections 5 and 8 of [`06_cloud_sql_database.md`](06_cloud_sql_database.md) and [`05_secret_manager_and_environment_config.md`](05_secret_manager_and_environment_config.md).
 
-**Simplificación real respecto a Cloud SQL**: no hace falta el sidecar Cloud SQL Auth Proxy ni el Java Connector — el Pod llega a la VM por su IP pública igual que llegaría a cualquier otro host de Internet. Esa simplicidad es, justamente, la otra cara de exponer el puerto 5432 públicamente (sección 3).
+**A real simplification compared to Cloud SQL**: neither the Cloud SQL Auth Proxy sidecar nor the Java Connector is needed — the Pod reaches the VM through its public IP just like it would reach any other host on the Internet. That simplicity is precisely the flip side of exposing port 5432 publicly (section 3).
 
-### 7.3 Migraciones (igual recomendación que en Cloud SQL)
+### 7.3 Migrations (same recommendation as for Cloud SQL)
 
-No depender de `ddl-auto=create`/`update` a largo plazo — usar Flyway o Liquibase para un esquema versionado y reproducible (ver sección 6.3 de [`06_cloud_sql_database.md`](06_cloud_sql_database.md)).
+Don't rely on `ddl-auto=create`/`update` in the long run — use Flyway or Liquibase for a versioned, reproducible schema (see section 6.3 of [`06_cloud_sql_database.md`](06_cloud_sql_database.md)).
 
 ---
 
-## 8) Diagrama del flujo
+## 8) Flow diagram
 
 ```mermaid
 flowchart TD
-    A["gcloud compute instances create<br/>e2-micro, us-central1, pd-standard 30GB"] --> B["IP externa estática<br/>(hogwarts-postgres-ip)"]
-    B --> C["Firewall: allow tcp:5432<br/>desde 0.0.0.0/0 (⚠️ expuesto)"]
-    C --> D["SSH a la VM"]
-    D --> E["Instalar Docker"]
-    E --> F["docker run postgres:15<br/>+ volumen pgdata"]
-    F --> G["Crear DBs y usuarios<br/>wizard_db / inventory_db / duel_db"]
-    G --> H["Pods en GKE<br/>(wizard/inventory/duel-service)"]
+    A["gcloud compute instances create<br/>e2-micro, us-central1, pd-standard 30GB"] --> B["Static external IP<br/>(hogwarts-postgres-ip)"]
+    B --> C["Firewall: allow tcp:5432<br/>from 0.0.0.0/0 (⚠️ exposed)"]
+    C --> D["SSH into the VM"]
+    D --> E["Install Docker"]
+    E --> F["docker run postgres:15<br/>+ pgdata volume"]
+    F --> G["Create DBs and users<br/>wizard_db / inventory_db / duel_db"]
+    G --> H["Pods on GKE<br/>(wizard/inventory/duel-service)"]
     H -->|"jdbc:postgresql://VM_EXTERNAL_IP:5432/..."| F
-    F --> I["Backups manuales<br/>(cron + pg_dumpall)"]
+    F --> I["Manual backups<br/>(cron + pg_dumpall)"]
 ```
 
 ---
 
-## 9) Comparación con Cloud SQL
+## 9) Comparison with Cloud SQL
 
-| | Cloud SQL (Opción Básica, `06`) | VM self-hosted (Always Free) |
+| | Cloud SQL (Basic Option, `06`) | Self-hosted VM (Always Free) |
 |---|---|---|
-| Costo mensual estimado | ~US$10–15/mes | **US$0** (dentro de los límites del free tier) |
-| Quién administra parches/HA/backups | Google | Vos |
-| Backups | Automáticos (configurables) | Manuales (cron / snapshots) |
-| Conexión desde los Pods de GKE | Cloud SQL Auth Proxy (cifrado, sin exponer puerto) | IP pública + puerto 5432 abierto |
-| SLA | Sí (según edición) | Ninguno |
-| Límite de recursos | El que elijas (pagás por más) | Fijo: 2 vCPU compartidas / 1 GB RAM / 30 GB HDD |
-| Uso recomendado | Dev/staging con algo de presupuesto | Dev/pruebas personales sin presupuesto, asumiendo el riesgo de seguridad |
+| Estimated monthly cost | ~US$10–15/month | **US$0** (within the free tier limits) |
+| Who handles patches/HA/backups | Google | You |
+| Backups | Automatic (configurable) | Manual (cron / snapshots) |
+| Connection from the GKE Pods | Cloud SQL Auth Proxy (encrypted, no exposed port) | Public IP + open port 5432 |
+| SLA | Yes (depending on edition) | None |
+| Resource limit | Whatever you choose (you pay for more) | Fixed: 2 shared vCPUs / 1 GB RAM / 30 GB HDD |
+| Recommended use | Dev/staging with some budget | Personal dev/testing with no budget, accepting the security risk |
 
 ---
 
-## 10) Recomendaciones mínimas de seguridad si usás esta opción
+## 10) Minimum security recommendations if you use this option
 
-- Password largo y aleatorio para el superusuario y para cada usuario de servicio — nunca el valor de ejemplo de esta guía.
-- Forzar SSL: `sslmode=require` (o `verify-full`) en el JDBC URL, y habilitar `ssl = on` en la configuración de PostgreSQL.
-- Mantener el SO actualizado (`sudo apt-get upgrade`, o `unattended-upgrades` en Debian) — nadie más lo va a hacer por vos en esta opción.
-- Si en algún momento el presupuesto lo permite, migrar a Cloud SQL (sección 6) o configurar peering de VPC para dejar de exponer el puerto 5432 a Internet.
-- No usar esta configuración con datos reales de usuarios — está pensada para desarrollo y demos.
+- A long, random password for the superuser and for each service user — never this guide's example value.
+- Enforce SSL: `sslmode=require` (or `verify-full`) in the JDBC URL, and enable `ssl = on` in the PostgreSQL configuration.
+- Keep the OS up to date (`sudo apt-get upgrade`, or `unattended-upgrades` on Debian) — nobody else will do it for you with this option.
+- If the budget ever allows it, move to Cloud SQL (guide `06`) or configure VPC peering to stop exposing port 5432 to the Internet.
+- Do not use this configuration with real user data — it is meant for development and demos.
 
-Ver también: [`06_cloud_sql_database.md`](06_cloud_sql_database.md), [`05_secret_manager_and_environment_config.md`](05_secret_manager_and_environment_config.md).
+See also: [`06_cloud_sql_database.md`](06_cloud_sql_database.md), [`05_secret_manager_and_environment_config.md`](05_secret_manager_and_environment_config.md).

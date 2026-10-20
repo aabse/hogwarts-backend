@@ -1,97 +1,97 @@
-## 00 — Prerrequisitos locales y herramientas
+## 00 — Local prerequisites and tools
 
-### Objetivo
+### Goal
 
-Dejar tu máquina lista para ejecutar los comandos de estas guías, evitando fallas típicas por falta de herramientas, permisos o configuración de `gcloud`.
+Get your machine ready to run the commands in these guides, avoiding the typical failures caused by missing tools, permissions or `gcloud` configuration.
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía **no modifica el código** del repositorio.
-- Solo prepara el entorno local y el acceso a GCP.
+- This guide **does not modify the repository code**.
+- It only prepares the local environment and access to GCP.
 
 ---
 
-## 1) Requisitos del repositorio (contexto)
+## 1) Repository requirements (context)
 
-Este repo es un proyecto **Gradle multi-módulo** con Java 17 y 3 microservicios Spring Boot:
+This repo is a **Gradle multi-module** project with Java 17 and 3 Spring Boot microservices:
 
 - `wizard-service`
 - `inventory-service`
 - `duel-service`
 
-En local, el repo sugiere correrlos con `./gradlew :<module>:bootRun` pasando `--server.port=...` (ver `README.md` del repo).
+Locally, the repo suggests running them with `./gradlew :<module>:bootRun`, passing `--server.port=...` (see the repo's `README.md`).
 
 ---
 
-## 2) Herramientas necesarias en tu equipo
+## 2) Tools you need on your machine
 
 ### 2.1 Google Cloud CLI (`gcloud`)
 
-Instala el Google Cloud CLI siguiendo la documentación oficial de tu OS.
+Install the Google Cloud CLI following the official documentation for your OS.
 
-Valida que quedó instalado:
+Check that it is installed:
 
 ```bash
 gcloud version
 ```
 
-Actualiza componentes (si aplica):
+Update components (if applicable):
 
 ```bash
 gcloud components update
 ```
 
-### 2.2 `kubectl` y el plugin de autenticación de GKE
+### 2.2 `kubectl` and the GKE authentication plugin
 
-Como el despliegue de los microservicios es en **GKE**, necesitas `kubectl` para interactuar con el cluster.
+Since the microservices are deployed to **GKE**, you need `kubectl` to interact with the cluster.
 
-Instala `kubectl` como componente de `gcloud`:
+Install `kubectl` as a `gcloud` component:
 
 ```bash
 gcloud components install kubectl
 ```
 
-> Si instalaste `gcloud` con Homebrew en macOS, usa en cambio: `brew install kubectl`. `gcloud` **no** instala `kubectl` automáticamente junto con el CLI base; es un componente separado que debes instalar explícitamente con el comando anterior.
+> If you installed `gcloud` with Homebrew on macOS, use this instead: `brew install kubectl`. `gcloud` does **not** install `kubectl` automatically with the base CLI; it is a separate component that you must install explicitly with the command above.
 
-`kubectl` ya no trae integrado el soporte de autenticación contra GKE (fue retirado de `client-go`), por lo que además necesitas el plugin `gke-gcloud-auth-plugin`:
+`kubectl` no longer ships built-in GKE authentication support (it was removed from `client-go`), so you also need the `gke-gcloud-auth-plugin` plugin:
 
 ```bash
 gcloud components install gke-gcloud-auth-plugin
 ```
 
-> Con Homebrew: `brew install gke-gcloud-auth-plugin`.
+> With Homebrew: `brew install gke-gcloud-auth-plugin`.
 
-Exporta la variable que activa el plugin (agrégala a tu `.bashrc`/`.zshrc` para que persista entre sesiones):
+Export the variable that enables the plugin (add it to your `.bashrc`/`.zshrc` so it persists across sessions):
 
 ```bash
 export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 ```
 
-Valida ambas instalaciones:
+Check both installations:
 
 ```bash
 kubectl version --client
 gke-gcloud-auth-plugin --version
 ```
 
-### 2.3 Docker (opcional, pero recomendado)
+### 2.3 Docker (optional, but recommended)
 
-**Cuándo lo necesitas**
-- Si quieres construir y probar imágenes localmente (con `pack` o Docker).
-- Si quieres correr un Postgres local temporal para validar conexión (opcional).
+**When you need it**
+- If you want to build and test images locally (with `pack` or Docker).
+- If you want to run a temporary local Postgres to validate the connection (optional).
 
-Valida:
+Check:
 
 ```bash
 docker --version
 docker ps
 ```
 
-### 2.4 Pack CLI (opcional; útil si quieres testear buildpacks localmente)
+### 2.4 Pack CLI (optional; useful to test buildpacks locally)
 
-Buildpacks permiten construir imágenes sin escribir Dockerfile. Cloud Build también puede hacerlo remoto, por lo que `pack` es opcional.
+Buildpacks build images without writing a Dockerfile. Cloud Build can also do it remotely, so `pack` is optional.
 
-Valida:
+Check:
 
 ```bash
 pack --version
@@ -99,64 +99,64 @@ pack --version
 
 ### 2.5 Java 17 (local)
 
-Solo es requerido si vas a compilar/ejecutar localmente.
+Only required if you are going to build/run locally.
 
-Valida Java:
+Check Java:
 
 ```bash
 java -version
 ```
 
-### 2.6 Resumen de herramientas
+### 2.6 Tools summary
 
-| Herramienta | Obligatoria | Para qué sirve |
+| Tool | Required | What it is for |
 |---|---|---|
-| `gcloud` CLI | Sí | Crear/administrar todos los recursos de GCP (proyecto, GKE, Cloud SQL, Secret Manager, etc.) |
-| `kubectl` | Sí | Interactuar con el cluster GKE (`apply`, `get`, `logs`, `exec`) |
-| `gke-gcloud-auth-plugin` | Sí | Permite que `kubectl` se autentique contra GKE |
-| Docker | Opcional | Construir/probar imágenes localmente, correr Postgres local |
-| Pack CLI | Opcional | Probar buildpacks localmente antes de usar Cloud Build |
-| Java 17 | Opcional | Compilar/ejecutar los microservicios en local |
+| `gcloud` CLI | Yes | Create/manage all GCP resources (project, GKE, Cloud SQL, Secret Manager, etc.) |
+| `kubectl` | Yes | Interact with the GKE cluster (`apply`, `get`, `logs`, `exec`) |
+| `gke-gcloud-auth-plugin` | Yes | Lets `kubectl` authenticate against GKE |
+| Docker | Optional | Build/test images locally, run a local Postgres |
+| Pack CLI | Optional | Test buildpacks locally before using Cloud Build |
+| Java 17 | Optional | Build/run the microservices locally |
 
 ---
 
-## 3) Autenticación y configuración inicial de `gcloud`
+## 3) `gcloud` authentication and initial setup
 
 ### 3.1 Login
 
-Inicia sesión:
+Sign in:
 
 ```bash
 gcloud auth login
 ```
 
-Si tu organización usa SSO/federación, usa el método indicado por tu IdP (Workforce/Workload Identity Federation).
+If your organization uses SSO/federation, use the method indicated by your IdP (Workforce/Workload Identity Federation).
 
-Valida tu cuenta activa:
+Check your active account:
 
 ```bash
 gcloud auth list
 ```
 
-### 3.2 Inicializa configuración (recomendado)
+### 3.2 Initialize the configuration (recommended)
 
 ```bash
 gcloud init
 ```
 
-Esto ayuda a seleccionar proyecto por defecto, región, y credenciales.
+This helps you select the default project, region and credentials.
 
-### 3.3 Definir variables de trabajo (recomendado)
+### 3.3 Define working variables (recommended)
 
-Durante las guías verás placeholders como `PROJECT_ID`, `REGION`, `REPO_NAME`, etc.
-Una forma práctica es exportarlas en tu shell para evitar repetir:
+Throughout the guides you will see placeholders such as `PROJECT_ID`, `REGION`, `REPO_NAME`, etc.
+A practical approach is to export them in your shell to avoid repeating them:
 
 ```bash
-export PROJECT_ID="tu-project-id"
+export PROJECT_ID="your-project-id"
 export REGION="us-central1"
 ```
 
-Luego, setear proyecto en `gcloud`:
+Then set the project in `gcloud`:
 
 ```bash
 gcloud config set project "$PROJECT_ID"
@@ -164,31 +164,31 @@ gcloud config set project "$PROJECT_ID"
 
 ---
 
-## 4) Permisos mínimos que vas a necesitar en GCP
+## 4) Minimum GCP permissions you will need
 
-Dependiendo de si eres owner o colaborador, en general necesitarás permisos para:
+Depending on whether you are an owner or a collaborator, you will generally need permissions to:
 
-- Crear/administrar clusters de GKE y sus workloads (`Deployments`/`Services`)
-- Crear/administrar Artifact Registry repos (Docker)
-- Ejecutar builds en Cloud Build
-- Crear/administrar Cloud SQL
-- Crear/leer secretos en Secret Manager
-- Configurar Identity Platform
-- (Opcional) Crear API Gateway
+- Create/manage GKE clusters and their workloads (`Deployments`/`Services`)
+- Create/manage Artifact Registry (Docker) repos
+- Run builds on Cloud Build
+- Create/manage Cloud SQL
+- Create/read secrets in Secret Manager
+- Configure Identity Platform
+- (Optional) Create an API Gateway
 
-**Sugerencia**: si estás en un proyecto “sandbox”, `roles/owner` facilita pruebas. Para entornos reales, aplica **least privilege**.
+**Tip**: in a "sandbox" project, `roles/owner` makes testing easier. For real environments, apply **least privilege**.
 
 ---
 
-## 5) Verificación rápida de conectividad a GCP
+## 5) Quick GCP connectivity check
 
-Lista proyectos (debe mostrarte al menos uno):
+List projects (it should show at least one):
 
 ```bash
 gcloud projects list
 ```
 
-Muestra tu proyecto actual:
+Show your current project:
 
 ```bash
 gcloud config get-value project
@@ -196,24 +196,23 @@ gcloud config get-value project
 
 ---
 
-## 6) Troubleshooting típico
+## 6) Common troubleshooting
 
-### 6.1 “Permission denied” / 403 en comandos
+### 6.1 "Permission denied" / 403 on commands
 
-- Verifica que estás en el `PROJECT_ID` correcto:
+- Check that you are on the correct `PROJECT_ID`:
 
 ```bash
 gcloud config get-value project
 ```
 
-- Verifica que tu usuario tenga roles en ese proyecto.
+- Check that your user has roles in that project.
 
-### 6.2 “gcloud: command not found”
+### 6.2 "gcloud: command not found"
 
-- Reinstala Google Cloud CLI y reinicia la terminal.
+- Reinstall the Google Cloud CLI and restart the terminal.
 
-### 6.3 Problemas con Docker
+### 6.3 Docker problems
 
-- Asegúrate de que Docker Desktop/daemon esté corriendo.
-- En macOS, revisa permisos de virtualización.
-
+- Make sure Docker Desktop/the daemon is running.
+- On macOS, check the virtualization permissions.

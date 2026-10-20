@@ -1,48 +1,48 @@
-## 12 — Diagrama: de `Dockerfile` a GKE (pasando por Artifact Registry)
+## 12 — Diagram: from `Dockerfile` to GKE (through Artifact Registry)
 
-### Objetivo
+### Goal
 
-Mostrar, en un solo diagrama, el flujo end-to-end de un microservicio cuando se construye la imagen **manualmente con `Dockerfile`** (en vez de buildpacks), se publica en **Artifact Registry**, y luego se ejecuta en **GKE**.
+Show, in a single diagram, the end-to-end flow of a microservice when the image is built **manually with a `Dockerfile`** (instead of buildpacks), published to **Artifact Registry**, and then run on **GKE**.
 
-Esta guía es un **complemento visual** — no introduce comandos nuevos. Los comandos reales están en:
+This guide is a **visual companion** — it introduces no new commands. The actual commands are in:
 
-- `03_artifact_registry_and_builds.md` (sección 3-bis) — build con `Dockerfile` y push
-- `04_gke_microservices.md` — deploy en GKE
+- `03_artifact_registry_and_builds.md` (section 3-bis) — build with a `Dockerfile` and push
+- `04_gke_microservices.md` — deploy to GKE
 
-### Alcance (importante)
+### Scope (important)
 
-- Solo documentación/diagrama, no modifica código del repo.
-- Usa `wizard-service` como ejemplo (es el único módulo con `Dockerfile` real hoy en el repo — ver `wizard-service/Dockerfile`); el mismo flujo aplica a `inventory-service`/`duel-service` si se crean sus `Dockerfile` análogos (ver `03_artifact_registry_and_builds.md`, sección 3-bis.4).
+- Documentation/diagram only; it does not modify the repo code.
+- It uses `wizard-service` as the example; the same flow applies to `inventory-service`/`duel-service`, which have equivalent `Dockerfile`s (see `03_artifact_registry_and_builds.md`, section 3-bis.4).
 
 ---
 
-## 1) Diagrama completo
+## 1) Full diagram
 
 ```mermaid
 flowchart TD
-    subgraph LOCAL["💻 Máquina local"]
-        A["wizard-service/Dockerfile<br/>(build context = raíz del repo)"]
+    subgraph LOCAL["💻 Local machine"]
+        A["wizard-service/Dockerfile<br/>(build context = repo root)"]
         B["docker build -f wizard-service/Dockerfile<br/>-t $WIZARD_IMAGE ."]
-        C["Etapa 1 (jdk-jammy):<br/>./gradlew :wizard-service:bootJar"]
-        D["Etapa 2 (jre-jammy):<br/>copia solo el jar generado"]
-        E["Imagen local:<br/>$WIZARD_IMAGE"]
+        C["Stage 1 (jdk-jammy):<br/>./gradlew :wizard-service:bootJar"]
+        D["Stage 2 (jre-jammy):<br/>copies only the generated jar"]
+        E["Local image:<br/>$WIZARD_IMAGE"]
         F["gcloud auth configure-docker<br/>$REGION-docker.pkg.dev"]
         G["docker push $WIZARD_IMAGE"]
     end
 
     subgraph AR["📦 Artifact Registry"]
-        H["Repositorio Docker: hogwarts-docker<br/>REGION-docker.pkg.dev/PROJECT_ID/hogwarts-docker"]
-        I["Imagen versionada:<br/>wizard-service:TAG"]
+        H["Docker repository: hogwarts-docker<br/>REGION-docker.pkg.dev/PROJECT_ID/hogwarts-docker"]
+        I["Versioned image:<br/>wizard-service:TAG"]
     end
 
     subgraph GKE["☸️ GKE Cluster (hogwarts-gke)"]
         J["kubectl apply -f wizard-service.yaml<br/>(Deployment + Service)"]
-        K["Nodo de GKE hace pull<br/>de la imagen desde Artifact Registry"]
-        L["Pod en ejecución<br/>ENTRYPOINT: java -jar app.jar"]
-        M["Service (LoadBalancer)<br/>expone IP pública externa"]
+        K["GKE node pulls<br/>the image from Artifact Registry"]
+        L["Running Pod<br/>ENTRYPOINT: java -jar app.jar"]
+        M["Service (LoadBalancer)<br/>exposes an external public IP"]
     end
 
-    N["🌐 Cliente<br/>curl / Postman"]
+    N["🌐 Client<br/>curl / Postman"]
 
     A --> B --> C --> D --> E
     E --> F --> G
@@ -55,28 +55,28 @@ flowchart TD
 
 ---
 
-## 2) Paso a paso (referencia rápida)
+## 2) Step by step (quick reference)
 
-| # | Fase | Comando / acción | Dónde ocurre | Guía detallada |
+| # | Phase | Command / action | Where it happens | Detailed guide |
 |---|------|-------------------|--------------|-----------------|
-| 1 | Definir imagen | `wizard-service/Dockerfile` (multi-stage: build con JDK, runtime con JRE) | Repo local | `BUILD_DEPLOY_DOCS/11_local_container_image.md` |
-| 2 | Construir imagen | `docker build -f wizard-service/Dockerfile -t "$WIZARD_IMAGE" .` (context = raíz del repo) | Docker local | `03_artifact_registry_and_builds.md` §3-bis.3 |
-| 3 | Autenticar Docker contra GCP | `gcloud auth configure-docker "$REGION-docker.pkg.dev"` | Máquina local (una vez) | `03_artifact_registry_and_builds.md` §3-bis.2 |
-| 4 | Publicar imagen | `docker push "$WIZARD_IMAGE"` | Local → Artifact Registry | `03_artifact_registry_and_builds.md` §3-bis.3 |
-| 5 | Verificar publicación | `gcloud artifacts docker images list ...` | Artifact Registry | `03_artifact_registry_and_builds.md` §1-2 |
-| 6 | Definir manifiesto K8s | `wizard-service.yaml` (`Deployment` apuntando a `$WIZARD_IMAGE` + `Service`) | Directorio local (`~/hogwarts-gcp/k8s`) | `04_gke_microservices.md` §4.1 |
-| 7 | Desplegar en el cluster | `kubectl apply -f wizard-service.yaml` | GKE | `04_gke_microservices.md` §4.2 |
-| 8 | GKE descarga la imagen | El nodo hace *pull* de la imagen desde Artifact Registry (mismo proyecto ⇒ sin config extra; ver permisos si es cross-project) | GKE (automático) | `04_gke_microservices.md` §3 |
-| 9 | Pod corriendo | Contenedor arranca con `ENTRYPOINT ["java","-jar","app.jar"]`, escucha en `:8080` | GKE | `04_gke_microservices.md` §4.3 |
-| 10 | Exponer servicio | `Service` tipo `LoadBalancer` asigna IP externa | GKE | `04_gke_microservices.md` §4.4 |
-| 11 | Validar | `curl "$WIZARD_URL/api/wizards"` | Cliente externo | `04_gke_microservices.md` §4.5 |
+| 1 | Define the image | `wizard-service/Dockerfile` (multi-stage: build with JDK, runtime with JRE) | Local repo | `BUILD_DEPLOY_DOCS/11_local_container_image.md` |
+| 2 | Build the image | `docker build -f wizard-service/Dockerfile -t "$WIZARD_IMAGE" .` (context = repo root) | Local Docker | `03_artifact_registry_and_builds.md` §3-bis.3 |
+| 3 | Authenticate Docker against GCP | `gcloud auth configure-docker "$REGION-docker.pkg.dev"` | Local machine (once) | `03_artifact_registry_and_builds.md` §3-bis.2 |
+| 4 | Publish the image | `docker push "$WIZARD_IMAGE"` | Local → Artifact Registry | `03_artifact_registry_and_builds.md` §3-bis.3 |
+| 5 | Verify the publish | `gcloud artifacts docker images list ...` | Artifact Registry | `03_artifact_registry_and_builds.md` §1-2 |
+| 6 | Define the K8s manifest | `wizard-service.yaml` (`Deployment` pointing to `$WIZARD_IMAGE` + `Service`) | Local directory (`~/hogwarts-gcp/k8s`) | `04_gke_microservices.md` §4.1 |
+| 7 | Deploy to the cluster | `kubectl apply -f wizard-service.yaml` | GKE | `04_gke_microservices.md` §4.2 |
+| 8 | GKE downloads the image | The node *pulls* the image from Artifact Registry (same project ⇒ no extra config; check permissions if cross-project) | GKE (automatic) | `04_gke_microservices.md` §3 |
+| 9 | Pod running | The container starts with `ENTRYPOINT ["java","-jar","app.jar"]` and listens on `:8080` | GKE | `04_gke_microservices.md` §4.3 |
+| 10 | Expose the service | A `LoadBalancer` `Service` assigns an external IP | GKE | `04_gke_microservices.md` §4.4 |
+| 11 | Validate | `curl "$WIZARD_URL/api/wizards"` | External client | `04_gke_microservices.md` §4.5 |
 
 ---
 
-## 3) Notas clave del flujo
+## 3) Key notes about the flow
 
-- **El build context siempre es la raíz del repo**, no la carpeta del microservicio: el `Dockerfile` de cada módulo necesita `gradlew`, `settings.gradle` y las tres carpetas de servicios porque es un build Gradle multi-proyecto.
-- **Versionado de la imagen**: el diagrama muestra `$WIZARD_IMAGE` sin tag para simplificar. En la práctica, cada imagen se publica con su **versión semántica** (`wizard-service:1.4.0`, tomada de `wizard-service/gradle.properties`) más el SHA del commit, y el `Deployment` de GKE referencia el tag semántico, nunca `:latest` (ver `03_artifact_registry_and_builds.md` §4).
-- **Actualizar una versión ya desplegada**: seguir el flujo de release (`03_artifact_registry_and_builds.md` §4.6) y luego `kubectl set image deployment/wizard-service wizard-service="$WIZARD_IMAGE:$WIZARD_VERSION"` (ver `04_gke_microservices.md` §9) en vez de reaplicar todo el manifiesto.
-- **Arquitectura**: si construyes desde Apple Silicon, agrega `--platform linux/amd64` (con `docker buildx`) para que la imagen corra en los nodos de GKE (ver `03_artifact_registry_and_builds.md` §3-bis.5).
-- Este mismo flujo aplica a `inventory-service` y `duel-service`, reemplazando el nombre del módulo, la imagen (`$INVENTORY_IMAGE`/`$DUEL_IMAGE`) y el manifiesto K8s correspondiente.
+- **The build context is always the repo root**, not the microservice folder: each module's `Dockerfile` needs `gradlew`, `settings.gradle` and the three service folders, because it is a Gradle multi-project build.
+- **Image versioning**: the diagram shows `$WIZARD_IMAGE` without a tag for simplicity. In practice, each image is published with its **semantic version** (`wizard-service:1.4.0`, taken from `wizard-service/gradle.properties`) plus the commit SHA, and the GKE `Deployment` references the semantic tag, never `:latest` (see `03_artifact_registry_and_builds.md` §4).
+- **Updating an already deployed version**: follow the release flow (`03_artifact_registry_and_builds.md` §4.6) and then run `kubectl set image deployment/wizard-service wizard-service="$WIZARD_IMAGE:$WIZARD_VERSION"` (see `04_gke_microservices.md` §9) instead of reapplying the whole manifest.
+- **Architecture**: if you build on Apple Silicon, add `--platform linux/amd64` (with `docker buildx`) so the image runs on the GKE nodes (see `03_artifact_registry_and_builds.md` §3-bis.5).
+- This same flow applies to `inventory-service` and `duel-service`, replacing the module name, the image (`$INVENTORY_IMAGE`/`$DUEL_IMAGE`) and the corresponding K8s manifest.

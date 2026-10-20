@@ -1,23 +1,23 @@
-## 08 — Interacción entre microservicios y validación de IDs
+## 08 — Interaction between microservices and ID validation
 
-### Objetivo
+### Goal
 
-Definir un camino claro para:
+Define a clear path to:
 
-1. Configurar **comunicación entre microservicios** desplegados en GKE.
-2. Implementar (a nivel de diseño e instrucciones) validaciones del tipo: "si llega un `wizardId` a `inventory-service`, debe verificarse contra `wizard-service`".
+1. Configure **communication between microservices** deployed on GKE.
+2. Implement (at the design and instruction level) validations such as: "if a `wizardId` reaches `inventory-service`, it must be checked against `wizard-service`".
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía describe configuraciones en GCP/GKE y el enfoque recomendado.
-- **No modifica el código** del repositorio.
-- Donde se requieran cambios de aplicación, se describen como **instrucciones**.
+- This guide describes configuration in GCP/GKE and the recommended approach.
+- It **does not modify the repository code**.
+- Where application changes are needed, they are described as **instructions**.
 
-### Resumen visual: llamadas internas y el límite de `NetworkPolicy`
+### Visual summary: internal calls and the `NetworkPolicy` boundary
 
 ```mermaid
 flowchart LR
-    subgraph Cluster["Cluster GKE (NetworkPolicy aplicada)"]
+    subgraph Cluster["GKE cluster (NetworkPolicy applied)"]
       INV["inventory-service<br/>(ClusterIP)"]
       DUEL["duel-service<br/>(ClusterIP)"]
       WIZ["wizard-service<br/>(ClusterIP)"]
@@ -26,56 +26,56 @@ flowchart LR
     end
 ```
 
-| Caso | Quién llama | A quién | Qué valida |
+| Case | Caller | Callee | What it validates |
 |---|---|---|---|
-| A | `inventory-service` | `wizard-service` | `wizardId` existe al asignar una wand |
-| B | `duel-service` | `wizard-service` | `attackerId`/`defenderId` existen al crear un duelo |
+| A | `inventory-service` | `wizard-service` | `wizardId` exists when assigning a wand |
+| B | `duel-service` | `wizard-service` | `attackerId`/`defenderId` exist when creating a duel |
 
 ---
 
-## 0) Contexto del repo (IDs cross-service)
+## 0) Repo context (cross-service IDs)
 
-Casos relevantes en este repo:
+Relevant cases in this repo:
 
-- `inventory-service` tiene endpoint `POST /api/inventory/wands/{wandId}/assign` que recibe `wizardId`.
-  - Hoy asigna el ID sin validar existencia del wizard.
-- `duel-service` recibe `attackerId` y `defenderId` (wizards).
-  - Hoy valida que no sean iguales, pero no valida existencia real del wizard.
-- Existe `X-Correlation-Id` como header estándar (filtro `CorrelationIdFilter` en cada servicio).
+- `inventory-service` has the endpoint `POST /api/inventory/wands/{wandId}/assign`, which receives `wizardId`.
+  - Today it assigns the ID without checking that the wizard exists.
+- `duel-service` receives `attackerId` and `defenderId` (wizards).
+  - Today it checks that they are not the same, but does not check that the wizards actually exist.
+- `X-Correlation-Id` exists as a standard header (`CorrelationIdFilter` filter in each service).
 
 ---
 
-## 1) Estrategias de comunicación entre microservicios en GKE
+## 1) Communication strategies between microservices on GKE
 
-### Estrategia A (recomendada): `Service` tipo `ClusterIP` + `NetworkPolicy`
+### Strategy A (recommended): `ClusterIP` `Service` + `NetworkPolicy`
 
-- Cada microservicio se expone dentro del cluster con un `Service` tipo `ClusterIP` (no público; ver guía `04`, sección 10 "Endurecimiento mínimo"). Solo es alcanzable vía DNS interno (`http://wizard-service.default.svc.cluster.local`) desde dentro del cluster.
-- Una `NetworkPolicy` por microservicio restringe explícitamente qué Pods (identificados por label) pueden abrir conexión hacia él — por ejemplo, solo `inventory-service` y `duel-service` pueden llamar a `wizard-service`; nada más.
-- No hay tokens que generar ni IAM que gestionar por llamada: el control de acceso vive a nivel de red (capa 3/4), igual que un firewall interno.
+- Each microservice is exposed inside the cluster with a `ClusterIP` `Service` (not public; see guide `04`, section 10 "Minimum hardening"). It is only reachable through internal DNS (`http://wizard-service.default.svc.cluster.local`) from inside the cluster.
+- One `NetworkPolicy` per microservice explicitly restricts which Pods (identified by label) can open a connection to it — for example, only `inventory-service` and `duel-service` can call `wizard-service`; nothing else.
+- There are no tokens to generate and no IAM to manage per call: access control lives at the network level (layer 3/4), just like an internal firewall.
 
 Pros:
-- Simple de operar, sin gestión de tokens por request.
-- `NetworkPolicy` es nativa de Kubernetes, sin dependencias externas.
+- Simple to operate, no per-request token management.
+- `NetworkPolicy` is native to Kubernetes, with no external dependencies.
 
-Contras:
-- Es control a nivel de red, no de identidad: cualquier Pod permitido por la policy puede llamar sin autenticarse a nivel de aplicación.
+Cons:
+- It is network-level control, not identity-based: any Pod allowed by the policy can call without authenticating at the application level.
 
-### Estrategia B (endurecimiento opcional, avanzado): autenticación a nivel de aplicación
+### Strategy B (optional, advanced hardening): application-level authentication
 
-Si además de restringir por red quieres que cada llamada esté autenticada (defensa en profundidad), hay dos caminos, ambos fuera del alcance base de esta guía:
+If, in addition to restricting by network, you want every call to be authenticated (defense in depth), there are two paths, both outside the base scope of this guide:
 
-- **JWT de servicio a servicio**: el llamador obtiene/firma un JWT (reusando, por ejemplo, el JWKS de Identity Platform de la guía `09`) y el servicio destino lo valida con Spring Security Resource Server.
-- **mTLS entre Pods**: vía un service mesh (Anthos Service Mesh / Istio) combinado con Workload Identity, cifra y autentica el tráfico pod-a-pod automáticamente, sin cambios de código.
+- **Service-to-service JWT**: the caller obtains/signs a JWT (reusing, for example, the Identity Platform JWKS from guide `09`) and the target service validates it with Spring Security Resource Server.
+- **mTLS between Pods**: through a service mesh (Anthos Service Mesh / Istio) combined with Workload Identity, it encrypts and authenticates pod-to-pod traffic automatically, with no code changes.
 
-Ambas requieren más infraestructura/código que la Estrategia A; úsalas solo si el perímetro de red no es suficiente para tus requisitos de seguridad.
+Both require more infrastructure/code than Strategy A; use them only if the network perimeter is not enough for your security requirements.
 
 ---
 
-## 2) Configuración recomendada en GKE (Estrategia A)
+## 2) Recommended configuration on GKE (Strategy A)
 
-### 2.1 Verificar que cada microservicio tenga su `Service` `ClusterIP`
+### 2.1 Check that each microservice has its `ClusterIP` `Service`
 
-Siguiendo la guía `04`, cada microservicio debe tener un `Service`. Para comunicación interna, el tipo recomendado es `ClusterIP` (no `LoadBalancer`):
+Following guide `04`, each microservice must have a `Service`. For internal communication, the recommended type is `ClusterIP` (not `LoadBalancer`):
 
 ```yaml
 apiVersion: v1
@@ -91,15 +91,15 @@ spec:
       targetPort: 8080
 ```
 
-Repite el patrón para `inventory-service` y `duel-service`.
+Repeat the pattern for `inventory-service` and `duel-service`.
 
-### 2.2 Etiquetar los Pods para que `NetworkPolicy` pueda identificarlos
+### 2.2 Label the Pods so `NetworkPolicy` can identify them
 
-En el `Deployment` de cada microservicio, asegúrate de que el Pod tenga una label `app: <nombre-servicio>` (ya debería existir desde la guía `04`, porque el `Service` la usa como `selector`).
+In each microservice's `Deployment`, make sure the Pod has an `app: <service-name>` label (it should already exist from guide `04`, because the `Service` uses it as its `selector`).
 
-### 2.3 Restringir el tráfico entrante a `wizard-service` con `NetworkPolicy`
+### 2.3 Restrict inbound traffic to `wizard-service` with a `NetworkPolicy`
 
-Solo permite tráfico desde Pods de `inventory-service` y `duel-service`:
+Only allow traffic from `inventory-service` and `duel-service` Pods:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -129,19 +129,19 @@ spec:
 kubectl apply -f wizard-service-networkpolicy.yaml
 ```
 
-> Nota: el plugin de red del cluster debe soportar `NetworkPolicy` (GKE lo soporta de forma nativa si está habilitado al crear el cluster — Autopilot lo tiene habilitado por defecto).
+> Note: the cluster's network plugin must support `NetworkPolicy` (GKE supports it natively if it is enabled when the cluster is created — Autopilot has it enabled by default).
 
 ---
 
-## 3) Cómo descubrir las URLs internas de cada microservicio
+## 3) How to find each microservice's internal URL
 
-A diferencia de una URL pública, el DNS interno de Kubernetes sigue un patrón predecible — no hace falta "descubrirlo" con un comando, se construye así:
+Unlike a public URL, Kubernetes internal DNS follows a predictable pattern — there is no need to "discover" it with a command; it is built like this:
 
 ```
-http://<nombre-del-service>.<namespace>.svc.cluster.local
+http://<service-name>.<namespace>.svc.cluster.local
 ```
 
-Ejemplo (namespace `default`):
+Example (`default` namespace):
 
 ```bash
 export WIZARD_URL="http://wizard-service.default.svc.cluster.local"
@@ -149,7 +149,7 @@ export INVENTORY_URL="http://inventory-service.default.svc.cluster.local"
 export DUEL_URL="http://duel-service.default.svc.cluster.local"
 ```
 
-Recomendación: guardar la URL de cada dependencia como env var en el `Deployment` del servicio llamador (ver guía `04`):
+Recommendation: store each dependency's URL as an env var in the calling service's `Deployment` (see guide `04`):
 
 ```yaml
 env:
@@ -159,119 +159,118 @@ env:
 
 ---
 
-## 4) Pruebas manuales (verificar la `NetworkPolicy`)
+## 4) Manual tests (verify the `NetworkPolicy`)
 
-### 4.1 Probar desde un Pod permitido (ej. `inventory-service`)
+### 4.1 Test from an allowed Pod (e.g. `inventory-service`)
 
 ```bash
 kubectl exec -it deploy/inventory-service -- curl -sS "$WIZARD_URL/api/wizards?page=0&size=20&sort=id,desc"
 ```
 
-Debería responder normalmente: `inventory-service` está en la lista de Pods permitidos por la `NetworkPolicy` de `wizard-service`.
+It should respond normally: `inventory-service` is in the list of Pods allowed by `wizard-service`'s `NetworkPolicy`.
 
-### 4.2 Probar desde un Pod de debug no permitido (para confirmar que la policy bloquea)
+### 4.2 Test from a non-allowed debug Pod (to confirm that the policy blocks it)
 
 ```bash
 kubectl run debug-pod --rm -it --image=curlimages/curl -- curl -sS --max-time 5 "$WIZARD_URL/api/wizards/1"
 ```
 
-Este Pod no tiene el label `app: inventory-service` ni `app: duel-service`, así que la conexión debería colgarse/fallar por timeout — confirmando que la `NetworkPolicy` está bloqueando correctamente el tráfico no autorizado.
+This Pod has neither the `app: inventory-service` nor the `app: duel-service` label, so the connection should hang/fail with a timeout — confirming that the `NetworkPolicy` is correctly blocking unauthorized traffic.
 
 ---
 
-## 5) Validación de IDs (instrucciones de implementación)
+## 5) ID validation (implementation instructions)
 
-### Caso A: `inventory-service` valida `wizardId` al asignar wand
+### Case A: `inventory-service` validates `wizardId` when assigning a wand
 
-**Objetivo funcional**
+**Functional goal**
 
-Cuando se llama:
+When this is called:
 
-- `POST /api/inventory/wands/{wandId}/assign` con `{ "wizardId": 123 }`
+- `POST /api/inventory/wands/{wandId}/assign` with `{ "wizardId": 123 }`
 
-El servicio debe:
+The service must:
 
-1. Llamar a `wizard-service` para validar que el wizard existe.
-2. Si no existe, retornar un error claro (ej. 404 o 400 según criterio).
+1. Call `wizard-service` to check that the wizard exists.
+2. If it does not exist, return a clear error (e.g. 404 or 400, depending on your criteria).
 
-**Endpoint disponible hoy para validar**
+**Endpoint available today for the check**
 
-- `GET /api/wizards/{id}` en `wizard-service`
+- `GET /api/wizards/{id}` on `wizard-service`
 
-**Instrucciones (alto nivel)**
+**Instructions (high level)**
 
-- En `inventory-service`, antes de persistir `assignedWizardId`:
-  - Ejecutar una llamada HTTP a `GET {WIZARD_SERVICE_URL}/api/wizards/{wizardId}`
-  - Manejar casos:
-    - 200: wizard existe → continuar
-    - 404: wizard no existe → retornar error al cliente
-    - 401/403: problema IAM/tokens → error de configuración/infra
-    - timeout: degradación/retry según política (ver resiliencia)
+- In `inventory-service`, before persisting `assignedWizardId`:
+  - Make an HTTP call to `GET {WIZARD_SERVICE_URL}/api/wizards/{wizardId}`
+  - Handle the cases:
+    - 200: the wizard exists → continue
+    - 404: the wizard does not exist → return an error to the client
+    - 401/403: IAM/token problem → configuration/infrastructure error
+    - timeout: degrade/retry according to the policy (see resilience)
 
-**Recomendaciones técnicas**
+**Technical recommendations**
 
-- Cliente HTTP: `RestClient`/`WebClient` (o `RestTemplate` si es legado).
-- Timeouts explícitos.
-- Propagar `X-Correlation-Id`:
-  - si el request entrante trae `X-Correlation-Id`, reenviarlo al llamado interno.
+- HTTP client: `RestClient`/`WebClient` (or `RestTemplate` for legacy code).
+- Explicit timeouts.
+- Propagate `X-Correlation-Id`:
+  - if the incoming request carries `X-Correlation-Id`, forward it on the internal call.
 
-### Caso B: `duel-service` valida `attackerId/defenderId`
+### Case B: `duel-service` validates `attackerId/defenderId`
 
-**Objetivo funcional**
+**Functional goal**
 
-Al crear un duelo:
+When creating a duel:
 
-- `POST /api/duels` con `{ "attackerId": 1, "defenderId": 2 }`
+- `POST /api/duels` with `{ "attackerId": 1, "defenderId": 2 }`
 
-El servicio debe:
+The service must:
 
-1. Validar que ambos wizards existen en `wizard-service`.
-2. Si alguno no existe, rechazar con error.
+1. Check that both wizards exist in `wizard-service`.
+2. If either does not exist, reject it with an error.
 
-**Instrucciones (alto nivel)**
+**Instructions (high level)**
 
-- Llamar 2 veces a `wizard-service`:
+- Call `wizard-service` twice:
   - `GET /api/wizards/{attackerId}`
   - `GET /api/wizards/{defenderId}`
-- En caso de 404, retornar error coherente.
+- On a 404, return a consistent error.
 
 ---
 
-## 6) Resiliencia recomendada (para llamadas internas)
+## 6) Recommended resilience (for internal calls)
 
-Como mínimo:
+At a minimum:
 
-- **Timeouts** (no dejar colgar requests)
-- **Retry** solo en errores transitorios (5xx, timeouts), con backoff
-- **Circuit breaker** (si crece el sistema)
+- **Timeouts** (never leave requests hanging)
+- **Retries** only on transient errors (5xx, timeouts), with backoff
+- **Circuit breaker** (as the system grows)
 
-**Importante**: evita retries ciegos en operaciones no idempotentes.
+**Important**: avoid blind retries on non-idempotent operations.
 
 ---
 
-## 7) Troubleshooting típico
+## 7) Common troubleshooting
 
-### 7.1 Timeout/conexión rechazada entre Pods
+### 7.1 Timeout/connection refused between Pods
 
-- Revisa que la `NetworkPolicy` del servicio destino incluya el label `app: <servicio-llamador>` en su lista de `from`.
-- Revisa las `NetworkPolicy` aplicadas:
+- Check that the target service's `NetworkPolicy` includes the `app: <calling-service>` label in its `from` list.
+- Review the applied `NetworkPolicy` objects:
 
 ```bash
 kubectl get networkpolicy
 kubectl describe networkpolicy wizard-service-allow-internal
 ```
 
-### 7.2 "Nombre no resuelve" (DNS interno)
+### 7.2 "Name does not resolve" (internal DNS)
 
-- Confirma el namespace correcto en el DNS (`<service>.<namespace>.svc.cluster.local`).
-- Verifica que el `Service` exista y tenga Pods `Ready` detrás:
+- Confirm the correct namespace in the DNS name (`<service>.<namespace>.svc.cluster.local`).
+- Check that the `Service` exists and has `Ready` Pods behind it:
 
 ```bash
 kubectl get svc wizard-service
 kubectl get endpoints wizard-service
 ```
 
-### 7.3 Timeouts por carga
+### 7.3 Timeouts under load
 
-- Revisa `requests`/`limits` de CPU y memoria del `Deployment` destino, y si el `HorizontalPodAutoscaler` (si existe) está escalando a tiempo.
-
+- Review the CPU and memory `requests`/`limits` of the target `Deployment`, and whether the `HorizontalPodAutoscaler` (if any) is scaling in time.

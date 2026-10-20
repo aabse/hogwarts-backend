@@ -1,37 +1,37 @@
-## 02 — Creación de proyecto en GCP
+## 02 — GCP project setup
 
-### Objetivo
+### Goal
 
-Crear un proyecto GCP para desplegar los microservicios del repo, dejando habilitadas las APIs necesarias y una configuración base consistente (región, naming, service accounts).
+Create a GCP project to deploy the repo's microservices, with the required APIs enabled and a consistent baseline configuration (region, naming, service accounts).
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía solo describe pasos en GCP y comandos `gcloud`.
-- No modifica código del repositorio.
+- This guide only describes steps in GCP and `gcloud` commands.
+- It does not modify the repository code.
 
-### Resumen visual
+### Visual summary
 
 ```mermaid
 flowchart TD
-    P[Crear proyecto] --> B[Asociar Billing]
-    B --> R[Configurar gcloud:<br/>proyecto + región]
-    R --> A["Habilitar APIs<br/>(GKE, Build, Artifact Registry,<br/>Cloud SQL, Secret Manager, Identity Platform)"]
-    A --> SA["Crear GSA para Workload Identity<br/>(roles: secretAccessor, cloudsql.client)"]
-    SA --> N[Definir naming por ambiente]
+    P[Create project] --> B[Link Billing]
+    B --> R[Configure gcloud:<br/>project + region]
+    R --> A["Enable APIs<br/>(GKE, Build, Artifact Registry,<br/>Cloud SQL, Secret Manager, Identity Platform)"]
+    A --> SA["Create GSA for Workload Identity<br/>(roles: secretAccessor, cloudsql.client)"]
+    SA --> N[Define naming per environment]
 ```
 
 ---
 
-## 0) Convenciones y variables
+## 0) Conventions and variables
 
-Define valores (ejemplos):
+Define values (examples):
 
 - `PROJECT_ID`: `hogwarts-dev-123`
 - `PROJECT_NAME`: `hogwarts-backend-dev`
-- `REGION`: `us-central1` (elige una región cercana a tus usuarios)
-- `LOCATION_ARTIFACT_REGISTRY`: normalmente igual a `REGION`
+- `REGION`: `us-central1` (pick a region close to your users)
+- `LOCATION_ARTIFACT_REGISTRY`: usually the same as `REGION`
 
-En terminal (recomendado):
+In the terminal (recommended):
 
 ```bash
 export PROJECT_ID="hogwarts-dev-123"
@@ -40,55 +40,55 @@ export REGION="us-central1"
 
 ---
 
-## 1) Crear proyecto (Consola)
+## 1) Create the project (Console)
 
-1. En Cloud Console, abre el selector de proyecto (arriba).
-2. Click “New Project”.
-3. Completa:
+1. In Cloud Console, open the project selector (top bar).
+2. Click "New Project".
+3. Fill in:
    - Name: `PROJECT_NAME`
-   - Project ID: `PROJECT_ID` (si está disponible; si no, ajusta)
-4. Si aplica, selecciona “Organization” y “Location” correctos.
-5. Crea el proyecto.
+   - Project ID: `PROJECT_ID` (if available; otherwise adjust it)
+4. If applicable, select the correct "Organization" and "Location".
+5. Create the project.
 
-### Verificación
+### Verification
 
-- En el selector de proyecto ya aparece el nuevo proyecto.
-
----
-
-## 2) Asociar Billing al proyecto (Consola)
-
-1. Ve a Billing.
-2. Selecciona “Manage billing accounts”.
-3. En “My projects” o “Projects linked”, vincula tu proyecto a una Billing Account.
-
-### Verificación
-
-- En el proyecto, en Billing, debe decir “Billing account: <...> (Active)”.
+- The new project shows up in the project selector.
 
 ---
 
-## 3) Configurar `gcloud` para el proyecto
+## 2) Link Billing to the project (Console)
 
-### 3.1 Seleccionar proyecto
+1. Go to Billing.
+2. Select "Manage billing accounts".
+3. Under "My projects" or "Projects linked", link your project to a Billing Account.
+
+### Verification
+
+- In the project's Billing page it should say "Billing account: <...> (Active)".
+
+---
+
+## 3) Configure `gcloud` for the project
+
+### 3.1 Select the project
 
 ```bash
 gcloud config set project "$PROJECT_ID"
 ```
 
-Verifica:
+Check:
 
 ```bash
 gcloud config get-value project
 ```
 
-### 3.2 Configurar región por defecto (GKE/Compute)
+### 3.2 Set the default region (GKE/Compute)
 
 ```bash
 gcloud config set compute/region "$REGION"
 ```
 
-Verifica:
+Check:
 
 ```bash
 gcloud config get-value compute/region
@@ -96,9 +96,9 @@ gcloud config get-value compute/region
 
 ---
 
-## 4) Habilitar APIs necesarias
+## 4) Enable the required APIs
 
-Habilita APIs mínimas para este camino (GKE + Cloud Build + Artifact Registry + Cloud SQL + Secret Manager + Identity Platform).
+Enable the minimum APIs for this path (GKE + Cloud Build + Artifact Registry + Cloud SQL + Secret Manager + Identity Platform).
 
 ```bash
 gcloud services enable \
@@ -112,7 +112,7 @@ gcloud services enable \
   serviceusage.googleapis.com
 ```
 
-Opcionales (muy útiles en práctica):
+Optional (very useful in practice):
 
 ```bash
 gcloud services enable \
@@ -123,9 +123,9 @@ gcloud services enable \
   apigateway.googleapis.com
 ```
 
-### Verificación
+### Verification
 
-Lista APIs habilitadas (puede tardar algunos segundos):
+List the enabled APIs (it may take a few seconds):
 
 ```bash
 gcloud services list --enabled
@@ -133,37 +133,37 @@ gcloud services list --enabled
 
 ---
 
-## 5) Crear service accounts base (recomendado)
+## 5) Create base service accounts (recommended)
 
-La idea es separar identidades:
+The idea is to separate identities:
 
-- Un service account de Google (GSA) que los Pods usarán vía **Workload Identity** (por microservicio o uno común).
-- Un service account para Cloud Build (si quieres separar permisos).
+- A Google service account (GSA) that the Pods will use via **Workload Identity** (one per microservice or a shared one).
+- A service account for Cloud Build (if you want to separate permissions).
 
-### 5.1 Service account para Workload Identity (ejemplo)
+### 5.1 Service account for Workload Identity (example)
 
-Este GSA será el que, más adelante (guía `04`), se asocie vía Workload Identity a las cuentas de servicio de Kubernetes (KSA) de cada Pod — así los Pods obtienen permisos de IAM sin usar claves estáticas.
+Later on (guide `04`), this GSA is bound via Workload Identity to the Kubernetes service accounts (KSA) of each Pod — that way the Pods get IAM permissions without static keys.
 
 ```bash
 gcloud iam service-accounts create hogwarts-gke-sa \
   --display-name="Hogwarts GKE workload SA"
 ```
 
-Guarda email:
+Save the email:
 
 ```bash
 export GKE_SA="hogwarts-gke-sa@$PROJECT_ID.iam.gserviceaccount.com"
 echo "$GKE_SA"
 ```
 
-### 5.2 Permisos típicos del workload SA
+### 5.2 Typical permissions for the workload SA
 
-Para este proyecto, normalmente necesitarás:
+For this project you will usually need to:
 
-- Leer secretos (Secret Manager) para DB / configs
-- Conectar a Cloud SQL (si usas Cloud SQL)
+- Read secrets (Secret Manager) for the DB / configs
+- Connect to Cloud SQL (if you use Cloud SQL)
 
-Asigna roles (mínimos recomendados):
+Grant roles (recommended minimum):
 
 ```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -175,7 +175,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --role="roles/cloudsql.client"
 ```
 
-### Verificación
+### Verification
 
 ```bash
 gcloud iam service-accounts list
@@ -183,15 +183,14 @@ gcloud iam service-accounts list
 
 ---
 
-## 6) Decisión importante: naming y separación por ambientes
+## 6) Key decision: naming and separation by environment
 
-Recomendación simple:
+Simple recommendation:
 
-- Un proyecto por ambiente: `hogwarts-dev`, `hogwarts-stg`, `hogwarts-prod`
-- Nombres consistentes de `Deployment`/`Service` en GKE:
+- One project per environment: `hogwarts-dev`, `hogwarts-stg`, `hogwarts-prod`
+- Consistent `Deployment`/`Service` names in GKE:
   - `wizard-service`
   - `inventory-service`
   - `duel-service`
 
-Esto simplifica permisos, billing, y despliegues.
-
+This simplifies permissions, billing and deployments.

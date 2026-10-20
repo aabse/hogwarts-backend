@@ -1,38 +1,38 @@
-## 05 — Secret Manager y configuración por ambiente
+## 05 — Secret Manager and per-environment configuration
 
-### Objetivo
+### Goal
 
-Definir una estrategia simple y segura para manejar variables sensibles (credenciales DB, URLs internas, keys) usando **Secret Manager**, y configurar los **Pods de GKE** para consumirlas por ambiente (dev/stg/prod).
+Define a simple and secure strategy to handle sensitive variables (DB credentials, internal URLs, keys) using **Secret Manager**, and configure the **GKE Pods** to consume them per environment (dev/stg/prod).
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía describe configuración en GCP y cómo "inyectar" secretos en los Pods de GKE.
-- No modifica el código del repositorio.
+- This guide describes configuration in GCP and how to "inject" secrets into the GKE Pods.
+- It does not modify the repository code.
 
-### Resumen: secretos por microservicio
+### Summary: secrets per microservice
 
-| Secreto | Consumido por | Mecanismo de inyección |
+| Secret | Consumed by | Injection mechanism |
 |---|---|---|
-| `wizard-db-url` / `-user` / `-password` | `wizard-service` | Secret Manager CSI driver o `Secret` de Kubernetes → env var |
-| `inventory-db-url` / `-user` / `-password` | `inventory-service` | idem |
-| `duel-db-url` / `-user` / `-password` | `duel-service` | idem |
+| `wizard-db-url` / `-user` / `-password` | `wizard-service` | Secret Manager CSI driver or Kubernetes `Secret` → env var |
+| `inventory-db-url` / `-user` / `-password` | `inventory-service` | same |
+| `duel-db-url` / `-user` / `-password` | `duel-service` | same |
 
 ---
 
-## 0) Principios recomendados
+## 0) Recommended principles
 
-- **No hardcodear secretos** en código ni en repositorio.
-- **No usar** `.env` en producción.
-- En GKE:
-  - valores no sensibles como env vars normales en el `Deployment`
-  - valores sensibles sincronizados desde Secret Manager hacia el Pod (CSI driver, o un `Secret` de Kubernetes)
-- Roles mínimos (least privilege): solo el service account de Workload Identity (`GKE_SA`) debe leer los secretos necesarios.
+- **Do not hardcode secrets** in code or in the repository.
+- **Do not use** `.env` files in production.
+- On GKE:
+  - non-sensitive values as regular env vars in the `Deployment`
+  - sensitive values synced from Secret Manager into the Pod (CSI driver, or a Kubernetes `Secret`)
+- Minimum roles (least privilege): only the Workload Identity service account (`GKE_SA`) should read the secrets it needs.
 
 ---
 
-## 1) Convención de nombres de secretos
+## 1) Secret naming convention
 
-Recomendación de nombres:
+Recommended names:
 
 - `wizard-db-url`
 - `wizard-db-user`
@@ -44,16 +44,16 @@ Recomendación de nombres:
 - `duel-db-user`
 - `duel-db-password`
 
-Opcionalmente, por ambiente:
+Optionally, per environment:
 
 - `wizard-db-password--dev`
 - `wizard-db-password--prod`
 
-La convención exacta depende de tu governance; lo importante es consistencia.
+The exact convention depends on your governance; what matters is consistency.
 
 ---
 
-## 2) Crear secretos (CLI)
+## 2) Create secrets (CLI)
 
 Define variables:
 
@@ -63,7 +63,7 @@ export REGION="us-central1"
 export GKE_SA="hogwarts-gke-sa@$PROJECT_ID.iam.gserviceaccount.com"
 ```
 
-### 2.1 Crear un secreto (ejemplo)
+### 2.1 Create a secret (example)
 
 ```bash
 echo -n "jdbc:postgresql:///wizard_db" | \
@@ -72,7 +72,7 @@ echo -n "jdbc:postgresql:///wizard_db" | \
   --data-file=-
 ```
 
-Agregar una versión (ejemplo password):
+Add a version (password example):
 
 ```bash
 echo -n "super-secret" | \
@@ -81,14 +81,14 @@ echo -n "super-secret" | \
   --data-file=-
 ```
 
-Si el secreto ya existe y quieres agregar una nueva versión:
+If the secret already exists and you want to add a new version:
 
 ```bash
 echo -n "super-secret-rotated" | \
   gcloud secrets versions add wizard-db-password --data-file=-
 ```
 
-### 2.2 Listar secretos
+### 2.2 List secrets
 
 ```bash
 gcloud secrets list
@@ -96,9 +96,9 @@ gcloud secrets list
 
 ---
 
-## 3) Otorgar acceso a secretos al service account de Workload Identity
+## 3) Grant secret access to the Workload Identity service account
 
-El GSA que los Pods usan vía Workload Identity necesita `roles/secretmanager.secretAccessor`.
+The GSA that the Pods use via Workload Identity needs `roles/secretmanager.secretAccessor`.
 
 ```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -106,19 +106,19 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --role="roles/secretmanager.secretAccessor"
 ```
 
-Verificación: revisa los IAM bindings, o intenta leer un secreto desde un Pod que use ese GSA vía Workload Identity.
+Verification: review the IAM bindings, or try to read a secret from a Pod that uses that GSA via Workload Identity.
 
 ---
 
-## 4) Inyectar secretos en los Pods de GKE
+## 4) Inject secrets into the GKE Pods
 
-Hay dos mecanismos habituales; elige uno por microservicio.
+There are two common mechanisms; pick one per microservice.
 
-### 4.1 Opción A (recomendada): Secret Manager CSI driver
+### 4.1 Option A (recommended): Secret Manager CSI driver
 
-El [Secret Manager CSI driver](https://cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component) monta los secretos directamente como archivos en el Pod, leyéndolos en vivo desde Secret Manager (no quedan copiados en un `Secret` de Kubernetes/`etcd`).
+The [Secret Manager CSI driver](https://cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component) mounts the secrets directly as files in the Pod, reading them live from Secret Manager (they are not copied into a Kubernetes `Secret`/`etcd`).
 
-Habilita el addon en el cluster:
+Enable the add-on on the cluster:
 
 ```bash
 gcloud container clusters update "$CLUSTER_NAME" \
@@ -126,7 +126,7 @@ gcloud container clusters update "$CLUSTER_NAME" \
   --update-addons=SecretManagerCsiDriver=ENABLED
 ```
 
-En el manifiesto del `Deployment` (ver guía `04`), agrega un volumen tipo `csi` y móntalo en el contenedor; el Pod debe usar una `ServiceAccount` de Kubernetes asociada vía Workload Identity a `$GKE_SA` (detalle de la asociación, en la guía `04`, sección de Workload Identity). El patrón conceptual:
+In the `Deployment` manifest (see guide `04`), add a `csi` volume and mount it in the container; the Pod must use a Kubernetes `ServiceAccount` bound via Workload Identity to `$GKE_SA` (details of the binding in guide `04`, Workload Identity section). The conceptual pattern:
 
 ```yaml
 volumes:
@@ -138,11 +138,11 @@ volumes:
         secretProviderClass: "wizard-service-secrets"
 ```
 
-El archivo montado se puede leer luego como variable de entorno vía un pequeño script de arranque, o directamente como archivo si tu configuración lo permite. En este trabajo **no se cambia código**; solo se define el patrón de configuración.
+The mounted file can then be read as an environment variable through a small startup script, or directly as a file if your configuration allows it. This work **does not change code**; it only defines the configuration pattern.
 
-### 4.2 Opción B (más simple): `Secret` de Kubernetes sincronizado manualmente
+### 4.2 Option B (simpler): manually synced Kubernetes `Secret`
 
-Si prefieres no usar el CSI driver, crea un `Secret` de Kubernetes con el valor actual de Secret Manager:
+If you prefer not to use the CSI driver, create a Kubernetes `Secret` with the current value from Secret Manager:
 
 ```bash
 kubectl create secret generic wizard-db-secrets \
@@ -151,7 +151,7 @@ kubectl create secret generic wizard-db-secrets \
   --from-literal=DB_PASSWORD="$(gcloud secrets versions access latest --secret=wizard-db-password)"
 ```
 
-Y referencia el `Secret` en el `Deployment` con `envFrom`:
+And reference the `Secret` in the `Deployment` with `envFrom`:
 
 ```yaml
 envFrom:
@@ -159,11 +159,11 @@ envFrom:
       name: wizard-db-secrets
 ```
 
-**Importante**: a diferencia de la Opción A, aquí el valor queda copiado en el cluster (`etcd`) en el momento de crear el `Secret`; si rotas la contraseña en Secret Manager, debes volver a ejecutar el `kubectl create secret ... --dry-run=client -o yaml | kubectl apply -f -` (o equivalente) y reiniciar los Pods para que tomen el nuevo valor.
+**Important**: unlike Option A, here the value is copied into the cluster (`etcd`) when the `Secret` is created; if you rotate the password in Secret Manager, you must run `kubectl create secret ... --dry-run=client -o yaml | kubectl apply -f -` (or equivalent) again and restart the Pods so they pick up the new value.
 
-### 4.3 Valores no sensibles como env vars normales
+### 4.3 Non-sensitive values as regular env vars
 
-Defínelos directamente en el `Deployment` (ver guía `04`):
+Define them directly in the `Deployment` (see guide `04`):
 
 ```yaml
 env:
@@ -173,50 +173,49 @@ env:
 
 ---
 
-## 5) Separación por ambientes
+## 5) Separation by environment
 
-Dos enfoques comunes:
+Two common approaches:
 
-### Enfoque A (recomendado): un proyecto por ambiente
+### Approach A (recommended): one project per environment
 
 - `hogwarts-dev`
 - `hogwarts-stg`
 - `hogwarts-prod`
 
-Pros: separa IAM/billing/recursos.
-Contras: más proyectos que administrar.
+Pros: separates IAM/billing/resources.
+Cons: more projects to manage.
 
-### Enfoque B: un proyecto, secretos por ambiente
+### Approach B: one project, secrets per environment
 
-- secretos con sufijo `--dev`, `--prod`
-- `SPRING_PROFILES_ACTIVE` (env var del Pod) para seleccionar
+- secrets with a `--dev`, `--prod` suffix
+- `SPRING_PROFILES_ACTIVE` (Pod env var) to select
 
-Pros: menos proyectos.
-Contras: mayor riesgo de mezclar recursos y permisos.
+Pros: fewer projects.
+Cons: higher risk of mixing resources and permissions.
 
 ---
 
-## 6) Troubleshooting típico
+## 6) Common troubleshooting
 
-### 6.1 "Permission denied" leyendo secretos
+### 6.1 "Permission denied" when reading secrets
 
-- Confirma que el Pod usa la `ServiceAccount` de Kubernetes esperada, asociada vía Workload Identity a `$GKE_SA`:
+- Confirm that the Pod uses the expected Kubernetes `ServiceAccount`, bound via Workload Identity to `$GKE_SA`:
 
 ```bash
 kubectl get pod <pod-name> -o jsonpath='{.spec.serviceAccountName}'
 ```
 
-- Confirma el binding de IAM:
+- Confirm the IAM binding:
 
 ```bash
 gcloud projects get-iam-policy "$PROJECT_ID" --flatten="bindings[].members" --format="table(bindings.role, bindings.members)" | grep "$GKE_SA"
 ```
 
-### 6.2 “Secret not found”
+### 6.2 "Secret not found"
 
-- Verifica nombre exacto:
+- Check the exact name:
 
 ```bash
 gcloud secrets list
 ```
-

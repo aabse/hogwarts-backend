@@ -1,88 +1,87 @@
-## 01 — Creación de cuenta GCP
+## 01 — GCP account setup
 
-### Objetivo
+### Goal
 
-Crear una cuenta de Google Cloud lista para trabajar con GKE, Cloud SQL, Artifact Registry, Secret Manager e Identity Platform, con una configuración base de seguridad (MFA) y billing activo.
+Create a Google Cloud account ready to work with GKE, Cloud SQL, Artifact Registry, Secret Manager and Identity Platform, with a baseline security configuration (MFA) and active billing.
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía solo describe pasos en GCP (consola).
-- No modifica código del repositorio.
+- This guide only describes steps in GCP (console).
+- It does not modify the repository code.
 
-### Resumen visual del flujo
+### Visual summary of the flow
 
 ```mermaid
 flowchart TD
-    A[Crear/usar cuenta Google] --> B[Acceder a Cloud Console]
-    B --> C[Activar Billing]
-    C --> D[Activar MFA y recuperación]
-    D --> E["Gobernanza (grupos, ambientes)"]
-    E --> F[Checklist de verificación]
+    A[Create/use a Google account] --> B[Open Cloud Console]
+    B --> C[Enable Billing]
+    C --> D[Enable MFA and recovery]
+    D --> E["Governance (groups, environments)"]
+    E --> F[Verification checklist]
 ```
 
 ---
 
-## 1) Crear cuenta de Google (si no tienes)
+## 1) Create a Google account (if you don't have one)
 
-1. Crea una cuenta Google estándar (Gmail) o usa una cuenta corporativa Google Workspace.
-2. Asegúrate de poder recibir emails (verificación y alertas de billing/seguridad).
-
----
-
-## 2) Acceder a Google Cloud Console
-
-1. Entra a Google Cloud Console (busca “Google Cloud Console”).
-2. Inicia sesión con la cuenta que usarás para administrar el proyecto.
+1. Create a standard Google account (Gmail) or use a Google Workspace corporate account.
+2. Make sure you can receive emails (verification and billing/security alerts).
 
 ---
 
-## 3) Activar Billing (imprescindible)
+## 2) Open Google Cloud Console
 
-GKE/Cloud SQL/Artifact Registry requieren billing activo en el proyecto.
-
-### 3.1 Si es una cuenta nueva (free trial)
-
-1. Activa el Free Trial si aplica.
-2. Completa método de pago (tarjeta).
-3. Confirma la región/país correctos para facturación.
-
-### 3.2 Si es una organización/empresa
-
-1. Confirma que existe una “Billing Account” disponible.
-2. Solicita acceso al equipo financiero/administrador si no la ves.
+1. Go to Google Cloud Console (search for "Google Cloud Console").
+2. Sign in with the account you will use to manage the project.
 
 ---
 
-## 4) Activar seguridad de la cuenta (muy recomendado)
+## 3) Enable Billing (mandatory)
 
-### 4.1 Activar MFA (2FA)
+GKE/Cloud SQL/Artifact Registry require active billing on the project.
 
-1. Ve a la configuración de seguridad de tu cuenta Google.
-2. Activa “Verificación en dos pasos”.
-3. Configura al menos 2 métodos:
-   - App authenticator (TOTP)
-   - Llave de seguridad (si tu organización la usa) o SMS como fallback
+### 3.1 New account (free trial)
 
-### 4.2 Recuperación
+1. Activate the Free Trial if applicable.
+2. Add a payment method (card).
+3. Confirm the correct billing region/country.
 
-1. Configura email y teléfono de recuperación.
-2. Guarda “backup codes” en un lugar seguro.
+### 3.2 Organization/company
 
----
-
-## 5) Recomendaciones de gobernanza (si aplica)
-
-Si trabajas en contexto corporativo (Workspace/Organization):
-
-- Preferir identidades corporativas (no cuentas personales).
-- Definir un grupo “admins” (Google Groups) y asignar roles al grupo, no a usuarios individuales.
-- Separar ambientes por proyecto (dev/stg/prod) desde el inicio si el objetivo es producción.
+1. Confirm that a "Billing Account" is available.
+2. Ask the finance team/administrator for access if you don't see it.
 
 ---
 
-## 6) Verificación (checklist)
+## 4) Secure the account (highly recommended)
 
-- Puedes entrar a Cloud Console sin errores.
-- Tienes billing activo o acceso a una Billing Account.
-- Tu cuenta tiene MFA habilitado.
+### 4.1 Enable MFA (2FA)
 
+1. Go to your Google account security settings.
+2. Turn on "2-Step Verification".
+3. Set up at least 2 methods:
+   - Authenticator app (TOTP)
+   - Security key (if your organization uses them) or SMS as a fallback
+
+### 4.2 Recovery
+
+1. Set up a recovery email and phone number.
+2. Store the "backup codes" in a safe place.
+
+---
+
+## 5) Governance recommendations (if applicable)
+
+If you work in a corporate context (Workspace/Organization):
+
+- Prefer corporate identities (not personal accounts).
+- Define an "admins" group (Google Groups) and grant roles to the group, not to individual users.
+- Separate environments by project (dev/stg/prod) from the start if the goal is production.
+
+---
+
+## 6) Verification (checklist)
+
+- You can open Cloud Console without errors.
+- You have active billing or access to a Billing Account.
+- Your account has MFA enabled.

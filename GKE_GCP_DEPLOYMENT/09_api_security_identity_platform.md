@@ -1,55 +1,55 @@
-## 09 — Segurización de APIs con Identity Platform (login → token → APIs)
+## 09 — Securing the APIs with Identity Platform (login → token → APIs)
 
-### Objetivo
+### Goal
 
-Segurizar los endpoints de los microservicios para que:
+Secure the microservices' endpoints so that:
 
-1. El usuario inicie sesión y obtenga un **token** (JWT).
-2. Con ese token, pueda llamar a las APIs.
+1. The user signs in and gets a **token** (JWT).
+2. With that token, they can call the APIs.
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía describe configuración en GCP (Identity Platform + opcional API Gateway) y pruebas con `curl`.
-- **No modifica el código** del repositorio.
-- Donde se requiera validación del token en los microservicios, se describe como **instrucciones**.
+- This guide describes configuration in GCP (Identity Platform + optionally API Gateway) and tests with `curl`.
+- It **does not modify the repository code**.
+- Where token validation is needed in the microservices, it is described as **instructions**.
 
 ---
 
-## 1) Arquitectura recomendada (sin crear microservicio de auth)
+## 1) Recommended architecture (without building an auth microservice)
 
-Como elegiste **Identity Platform**, la recomendación para una solución limpia es:
+Since you chose **Identity Platform**, the recommendation for a clean solution is:
 
-- **Identity Platform**: gestiona usuarios y emite tokens (JWT).
-- **API Gateway** (opcional pero recomendado): valida JWT en el borde y enruta a los Services de GKE.
-- **GKE**: Services internos tipo `ClusterIP` (sin acceso público directo). Solo el gateway los invoca.
+- **Identity Platform**: manages users and issues tokens (JWT).
+- **API Gateway** (optional but recommended): validates the JWT at the edge and routes to the GKE Services.
+- **GKE**: internal `ClusterIP` Services (no direct public access). Only the gateway calls them.
 
-Alternativa:
+Alternative:
 
-- Sin API Gateway: cada microservicio valida JWT directamente (Spring Security Resource Server). También se documenta.
+- Without API Gateway: each microservice validates the JWT directly (Spring Security Resource Server). This is documented as well.
 
-### Resumen visual: login → token → Gateway → backend
+### Visual summary: login → token → Gateway → backend
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuario/Cliente
+    participant U as User/Client
     participant IP as Identity Platform
     participant GW as API Gateway
-    participant S as Service GKE (ClusterIP)
+    participant S as GKE Service (ClusterIP)
 
     U->>IP: signInWithPassword (email/password)
     IP-->>U: idToken (JWT)
     U->>GW: GET /api/wizards<br/>Authorization: Bearer idToken
-    GW->>GW: Validar JWT (issuer/audience)
-    GW->>S: Reenvía request al backend
+    GW->>GW: Validate JWT (issuer/audience)
+    GW->>S: Forward request to the backend
     S-->>GW: 200 OK
     GW-->>U: 200 OK
 ```
 
 ---
 
-## 2) Habilitar y configurar Identity Platform
+## 2) Enable and configure Identity Platform
 
-### 2.1 Habilitar API
+### 2.1 Enable the API
 
 ```bash
 export PROJECT_ID="hogwarts-dev-123"
@@ -58,42 +58,42 @@ gcloud config set project "$PROJECT_ID"
 gcloud services enable identitytoolkit.googleapis.com
 ```
 
-### 2.2 Activar Identity Platform en consola
+### 2.2 Activate Identity Platform in the console
 
-1. En Cloud Console, busca “Identity Platform”.
-2. Click “Enable Identity Platform” (si aplica).
+1. In Cloud Console, search for "Identity Platform".
+2. Click "Enable Identity Platform" (if applicable).
 
-### 2.3 Habilitar proveedor Email/Password
+### 2.3 Enable the Email/Password provider
 
 1. Identity Platform → Providers
-2. Habilita **Email/Password**
-3. Guarda cambios
+2. Enable **Email/Password**
+3. Save the changes
 
 ---
 
-## 3) Crear un usuario de prueba
+## 3) Create a test user
 
-Puedes hacerlo desde consola o vía API.
+You can do it from the console or via the API.
 
-### 3.1 Desde consola (simple)
+### 3.1 From the console (simple)
 
 1. Identity Platform → Users
-2. “Add user”
-3. Define email y password
+2. "Add user"
+3. Set an email and password
 
-### 3.2 (Opcional) Vía API (Identity Toolkit)
+### 3.2 (Optional) Via the API (Identity Toolkit)
 
-Necesitas un **API key** del proyecto:
+You need a project **API key**:
 
 1. APIs & Services → Credentials
-2. “Create credentials” → “API key”
-3. Copia el valor como `API_KEY`
+2. "Create credentials" → "API key"
+3. Copy the value as `API_KEY`
 
 ```bash
-export API_KEY="TU_API_KEY"
+export API_KEY="YOUR_API_KEY"
 ```
 
-Crear usuario (sign up):
+Create a user (sign up):
 
 ```bash
 curl -sS -X POST \
@@ -104,13 +104,13 @@ curl -sS -X POST \
 
 ---
 
-## 4) Login y obtención de token (idToken)
+## 4) Login and getting the token (idToken)
 
-Identity Platform (email/password) permite obtener un JWT (`idToken`) usando:
+Identity Platform (email/password) lets you get a JWT (`idToken`) using:
 `accounts:signInWithPassword`.
 
 ```bash
-export API_KEY="TU_API_KEY"
+export API_KEY="YOUR_API_KEY"
 export EMAIL="user@example.com"
 export PASSWORD="Str0ngPass!"
 
@@ -125,21 +125,21 @@ export ID_TOKEN="$(
 echo "$ID_TOKEN" | head -c 30 && echo "..."
 ```
 
-> Nota: el comando usa Python solo para extraer `idToken`. Puedes usar `jq` si lo prefieres.
+> Note: the command uses Python only to extract `idToken`. You can use `jq` if you prefer.
 
 ---
 
-## 5) Opción recomendada: API Gateway validando JWT + backend GKE restringido
+## 5) Recommended option: API Gateway validating the JWT + restricted GKE backend
 
-### 5.1 Qué logra esta opción
+### 5.1 What this option achieves
 
-- El cliente solo ve 1 endpoint (Gateway).
-- El gateway:
-  - valida el JWT
-  - enruta a los backends (Services de GKE)
-- Los Services de GKE no reciben tráfico público directo: solo son alcanzables a través del Ingress/IP que usa el Gateway (ver sección 5.8).
+- The client only sees 1 endpoint (the Gateway).
+- The gateway:
+  - validates the JWT
+  - routes to the backends (GKE Services)
+- The GKE Services receive no direct public traffic: they are only reachable through the Ingress/IP used by the Gateway (see section 5.8).
 
-### 5.2 Habilitar APIs de API Gateway
+### 5.2 Enable the API Gateway APIs
 
 ```bash
 gcloud services enable \
@@ -148,9 +148,9 @@ gcloud services enable \
   servicecontrol.googleapis.com
 ```
 
-### 5.3 Obtener los endpoints de los backends en GKE
+### 5.3 Get the backend endpoints on GKE
 
-API Gateway necesita una dirección HTTPS alcanzable para cada backend. La forma recomendada en GKE es exponer un único `Ingress` (con IP externa estática) que enrute por path hacia cada `Service` interno — así el Gateway apunta a un solo host, y los Services individuales permanecen como `ClusterIP` (no expuestos directamente).
+API Gateway needs a reachable HTTPS address for each backend. The recommended way on GKE is to expose a single `Ingress` (with a static external IP) that routes by path to each internal `Service` — that way the Gateway points to a single host, and the individual Services remain `ClusterIP` (not directly exposed).
 
 ```bash
 export REGION="us-central1"
@@ -160,7 +160,7 @@ export INGRESS_IP="$(gcloud compute addresses describe hogwarts-ingress-ip --glo
 echo "$INGRESS_IP"
 ```
 
-Define el `Ingress` (fuera del repo, junto a los demás manifiestos de la guía `04`) enrutando por path a cada `Service`:
+Define the `Ingress` (outside the repo, next to the other manifests from guide `04`), routing by path to each `Service`:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -198,13 +198,13 @@ kubectl apply -f hogwarts-ingress.yaml
 export BACKEND_URL="https://$INGRESS_IP"
 ```
 
-> Usa `$BACKEND_URL` en el spec OpenAPI de la sección siguiente: como el `Ingress` ya enruta por path a cada microservicio, todas las operaciones apuntan al mismo host.
+> Use `$BACKEND_URL` in the OpenAPI spec of the next section: since the `Ingress` already routes by path to each microservice, all operations point to the same host.
 
-### 5.4 Crear especificación OpenAPI para el gateway (archivo externo)
+### 5.4 Create the OpenAPI specification for the gateway (external file)
 
-Como este trabajo es solo documentación, crea este archivo **fuera del repo** (por ejemplo `~/hogwarts-gcp/openapi-hogwarts.yaml`).
+Since this work is documentation only, create this file **outside the repo** (for example `~/hogwarts-gcp/openapi-hogwarts.yaml`).
 
-Contenido base (ajusta `PROJECT_ID` y las URLs):
+Base content (adjust `PROJECT_ID` and the URLs):
 
 ```yaml
 swagger: "2.0"
@@ -218,7 +218,7 @@ schemes:
 produces:
   - application/json
 
-# Seguridad: validar JWT emitido por Identity Platform/Firebase Secure Token.
+# Security: validate the JWT issued by Identity Platform/Firebase Secure Token.
 securityDefinitions:
   firebase:
     authorizationUrl: ""
@@ -357,14 +357,14 @@ paths:
           description: "OK"
 ```
 
-Reemplaza placeholders:
+Replace the placeholders:
 
-- `PROJECT_ID` por tu Project ID real (dos lugares: issuer y audiences)
-- `BACKEND_URL` por el valor real de `$BACKEND_URL` (la IP del `Ingress` de la sección 5.3)
+- `PROJECT_ID` with your real Project ID (two places: issuer and audiences)
+- `BACKEND_URL` with the real value of `$BACKEND_URL` (the `Ingress` IP from section 5.3)
 
-Nota: como el `Ingress` ya enruta por path hacia el `Service` correcto dentro del cluster, todas las operaciones apuntan al mismo `BACKEND_URL` — el ruteo fino ocurre en GKE, no en el Gateway. No se usa `jwt_audience` porque el `Ingress` es un endpoint HTTPS regular, sin un mecanismo de identidad de invocación que negociar.
+Note: since the `Ingress` already routes by path to the right `Service` inside the cluster, all operations point to the same `BACKEND_URL` — fine-grained routing happens in GKE, not in the Gateway. `jwt_audience` is not used because the `Ingress` is a regular HTTPS endpoint, with no invocation identity mechanism to negotiate.
 
-### 5.5 Crear recursos de API Gateway (CLI)
+### 5.5 Create the API Gateway resources (CLI)
 
 Define:
 
@@ -376,13 +376,13 @@ export REGION="us-central1"
 export OPENAPI_SPEC_PATH="$HOME/hogwarts-gcp/openapi-hogwarts.yaml"
 ```
 
-Crear API:
+Create the API:
 
 ```bash
 gcloud api-gateway apis create "$API_ID"
 ```
 
-Crear API config:
+Create the API config:
 
 ```bash
 gcloud api-gateway api-configs create "$API_CONFIG_ID" \
@@ -391,7 +391,7 @@ gcloud api-gateway api-configs create "$API_CONFIG_ID" \
   --project="$PROJECT_ID"
 ```
 
-Crear gateway:
+Create the gateway:
 
 ```bash
 gcloud api-gateway gateways create "$GATEWAY_ID" \
@@ -400,7 +400,7 @@ gcloud api-gateway gateways create "$GATEWAY_ID" \
   --location="$REGION"
 ```
 
-### 5.6 Obtener URL del Gateway
+### 5.6 Get the Gateway URL
 
 ```bash
 gcloud api-gateway gateways describe "$GATEWAY_ID" \
@@ -416,63 +416,62 @@ export GATEWAY_URL="https://$GATEWAY_HOSTNAME"
 echo "$GATEWAY_URL"
 ```
 
-### 5.7 Probar APIs a través del Gateway (con token)
+### 5.7 Test the APIs through the Gateway (with a token)
 
-Listar wizards:
+List wizards:
 
 ```bash
 curl -sS "$GATEWAY_URL/api/wizards?page=0&size=20&sort=id,desc" \
   -H "Authorization: Bearer $ID_TOKEN"
 ```
 
-Si no envías token, deberías ver un error (401/403) del gateway.
+If you don't send a token, you should get an error (401/403) from the gateway.
 
-### 5.8 Restringir el backend de GKE para que solo el Gateway lo alcance
+### 5.8 Restrict the GKE backend so that only the Gateway can reach it
 
-GKE no ofrece un rol de IAM que autorice "quién puede invocar este backend" por invocación individual. En GKE, el control equivalente se logra a nivel de **red**, con una de estas dos opciones:
+GKE offers no IAM role that authorizes "who can invoke this backend" per individual invocation. On GKE, the equivalent control is achieved at the **network** level, with one of these two options:
 
-**Opción A (recomendada): `NetworkPolicy` + Ingress con IP reservada**
+**Option A (recommended): `NetworkPolicy` + Ingress with a reserved IP**
 
-Como los `Service` quedan como `ClusterIP` (sección 5.3) y solo el `Ingress` los expone, el tráfico externo únicamente puede llegar a través de ese `Ingress`. Si además quieres que ningún otro Pod del cluster les hable directamente salvo lo necesario (ver guía `08`), combina con las `NetworkPolicy` de esa guía.
+Since the `Service`s stay as `ClusterIP` (section 5.3) and only the `Ingress` exposes them, external traffic can only arrive through that `Ingress`. If you also want no other Pod in the cluster to talk to them directly beyond what is needed (see guide `08`), combine this with that guide's `NetworkPolicy` objects.
 
-**Opción B (si usas Cloud Armor): restringir el `Ingress` a los rangos de IP de API Gateway**
+**Option B (if you use Cloud Armor): restrict the `Ingress` to API Gateway's IP ranges**
 
-Si quieres que *solo* el tráfico que pasa por API Gateway llegue al `Ingress` (y no cualquier cliente que descubra la IP del `Ingress`), agrega una política de Cloud Armor al `Ingress` que permita únicamente los rangos de salida documentados de API Gateway, y bloquee el resto.
+If you want *only* traffic that goes through API Gateway to reach the `Ingress` (and not any client that discovers the `Ingress` IP), add a Cloud Armor policy to the `Ingress` that only allows API Gateway's documented egress ranges and blocks everything else.
 
-> No hay un service account administrado de API Gateway que autorizar vía IAM sobre el backend — el control de acceso se hace a nivel de red/firewall, no de identidad de invocación.
+> There is no managed API Gateway service account to authorize via IAM on the backend — access control is done at the network/firewall level, not by invocation identity.
 
 ---
 
-## 6) Alternativa: validar JWT en cada microservicio (solo instrucciones)
+## 6) Alternative: validate the JWT in each microservice (instructions only)
 
-Si no quieres API Gateway, cada microservicio debe validar el `Authorization: Bearer <JWT>`:
+If you don't want API Gateway, each microservice must validate the `Authorization: Bearer <JWT>` header:
 
-### 6.1 Instrucciones de alto nivel (Spring Security)
+### 6.1 High-level instructions (Spring Security)
 
-- Agregar dependencias:
+- Add the dependencies:
   - `spring-boot-starter-security`
   - `spring-boot-starter-oauth2-resource-server`
-- Configurar Resource Server JWT con:
+- Configure the JWT Resource Server with:
   - issuer: `https://securetoken.google.com/PROJECT_ID`
   - JWKS: `https://www.googleapis.com/service_accounts/v1/metadata/x509/securetoken@system.gserviceaccount.com`
-- Proteger rutas (por ejemplo todo `/api/**`) excepto health endpoints si los agregas.
+- Protect the routes (for example all of `/api/**`) except the health endpoints if you add them.
 
-### 6.2 Pruebas
+### 6.2 Tests
 
-- Sin token: 401/403
-- Con token válido: 200
+- Without a token: 401/403
+- With a valid token: 200
 
 ---
 
-## 7) Separación de “user auth” vs “service-to-service auth”
+## 7) Separating "user auth" from "service-to-service auth"
 
-No mezcles conceptos:
+Don't mix the concepts:
 
-- **User auth (Identity Platform)**: para clientes externos (frontend, Postman, etc.).
-- **Service-to-service (`ClusterIP` + `NetworkPolicy`)**: para llamadas internas entre microservicios (ver guía `08`).
+- **User auth (Identity Platform)**: for external clients (frontend, Postman, etc.).
+- **Service-to-service (`ClusterIP` + `NetworkPolicy`)**: for internal calls between microservices (see guide `08`).
 
-Puedes tener ambos:
+You can have both:
 
-- Externamente: Gateway valida JWT de usuario.
-- Internamente: servicios se llaman por DNS interno, restringidos por `NetworkPolicy` (sin exponer endpoints internos fuera del cluster).
-
+- Externally: the Gateway validates the user's JWT.
+- Internally: the services call each other through internal DNS, restricted by `NetworkPolicy` (without exposing internal endpoints outside the cluster).

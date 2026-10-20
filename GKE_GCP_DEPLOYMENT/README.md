@@ -1,40 +1,40 @@
-## GKE_GCP_DEPLOYMENT — Guías paso a paso
+## GKE_GCP_DEPLOYMENT — Step-by-step guides
 
-Este directorio contiene guías **paso a paso** para desplegar los microservicios de este repo en **Google Cloud Platform (GCP)** usando **Google Kubernetes Engine (GKE)**, migrar persistencia a **Cloud SQL (PostgreSQL)**, definir **interacción segura** entre microservicios, y **segurizar** APIs con **Identity Platform**.
+This directory contains **step-by-step** guides to deploy this repo's microservices to **Google Cloud Platform (GCP)** using **Google Kubernetes Engine (GKE)**, move persistence to **Cloud SQL (PostgreSQL)**, define **secure interaction** between microservices, and **secure** the APIs with **Identity Platform**.
 
-### Alcance (importante)
+### Scope (important)
 
-- **Solo documentación**: estas guías describen qué hacer en GCP y qué ajustes serían necesarios en aplicaciones Spring Boot.
-- **No se realiza ningún cambio en el código del repo**: no se agregan dependencias, no se cambian properties, no se crean `Dockerfile`, `cloudbuild.yaml`, Terraform, etc. (los manifiestos de Kubernetes se documentan como archivos de infraestructura fuera del repo).
-- Donde el proceso requiere cambios de aplicación, se listan como **instrucciones** (qué archivo tocar y qué agregar) para que tú los apliques fuera de este trabajo.
+- **Documentation only**: these guides describe what to do in GCP and which changes Spring Boot applications would need.
+- **No changes are made to the repo code**: no dependencies are added, no properties are changed, and no `Dockerfile`, `cloudbuild.yaml`, Terraform, etc. are created (Kubernetes manifests are documented as infrastructure files outside the repo).
+- Where the process requires application changes, they are listed as **instructions** (which file to touch and what to add) for you to apply outside this work.
 
-### Microservicios del repo (referencia rápida)
+### Microservices in the repo (quick reference)
 
 - **wizard-service**: `/api/wizards` (+ `/api/wizards/attack`)
 - **inventory-service**: `/api/inventory/wands`, `/api/inventory/potions`, `/api/inventory/brooms`
 - **duel-service**: `/api/duels`
 
-Los ejemplos de requests están en la colección Postman del repo: `Hogwarts_API.postman_collection.json`.
+Request examples are in the repo's Postman collection: `Hogwarts_API.postman_collection.json`.
 
-### Orden de lectura
+### Reading order
 
-El número de cada archivo refleja el orden real de lectura: cada guía solo asume pasos de archivos **anteriores**.
+Each file's number reflects the actual reading order: every guide only assumes steps from **previous** files.
 
 ```mermaid
 flowchart TD
-    00["00 · Prerrequisitos"] --> 01["01 · Cuenta GCP"]
-    01 --> 02["02 · Proyecto GCP"]
-    02 --> 03["03 · Artifact Registry y builds"]
-    03 --> 04["04 · Deploy en GKE"]
+    00["00 · Prerequisites"] --> 01["01 · GCP account"]
+    01 --> 02["02 · GCP project"]
+    02 --> 03["03 · Artifact Registry and builds"]
+    03 --> 04["04 · Deploy to GKE"]
     04 --> 05["05 · Secret Manager"]
     05 --> 06["06 · Cloud SQL"]
-    06 -.alternativa sin presupuesto.-> 07["07 · Postgres en VM gratis"]
-    06 --> 08["08 · Interacción entre microservicios"]
+    06 -.no-budget alternative.-> 07["07 · Postgres on a free VM"]
+    06 --> 08["08 · Microservice interaction"]
     07 --> 08
     08 --> 09["09 · Identity Platform + API Gateway"]
-    09 --> 10["10 · Observabilidad"]
-    10 --> 11["11 · Checklist de producción y costos"]
-    04 -.complemento visual.-> 12["12 · Diagrama Dockerfile→GKE"]
+    09 --> 10["10 · Observability"]
+    10 --> 11["11 · Production checklist and costs"]
+    04 -.visual companion.-> 12["12 · Dockerfile→GKE diagram"]
 ```
 
 1. `00_local_prerequisites_and_tools.md`
@@ -43,10 +43,10 @@ flowchart TD
 4. `03_artifact_registry_and_builds.md`
 5. `04_gke_microservices.md`
 6. `05_secret_manager_and_environment_config.md`
-7. `06_cloud_sql_database.md` — o, como alternativa sin presupuesto, `07_free_postgres_vm_alternative.md`
+7. `06_cloud_sql_database.md` — or, as a no-budget alternative, `07_free_postgres_vm_alternative.md`
 8. `08_microservice_interaction_id_validation.md`
 9. `09_api_security_identity_platform.md`
 10. `10_observability_logging_monitoring.md`
 11. `11_production_checklist_and_costs.md`
 
-Diagrama complementario (opcional): `12_flow_diagram_dockerfile_artifact_registry_gke.md` — resume visualmente el camino `Dockerfile` → `docker push` a Artifact Registry → deploy en GKE.
+Companion diagram (optional): `12_flow_diagram_dockerfile_artifact_registry_gke.md` — a visual summary of the path `Dockerfile` → `docker push` to Artifact Registry → deploy to GKE.

@@ -1,27 +1,27 @@
-## 04 — Microservicios en GKE (deploy, ejecución y pruebas)
+## 04 — Microservices on GKE (deploy, run and test)
 
-### Objetivo
+### Goal
 
-Desplegar los 3 microservicios (`wizard-service`, `inventory-service`, `duel-service`) en **Google Kubernetes Engine (GKE)**, usando imágenes publicadas en **Artifact Registry**, y validar que las APIs funcionan (smoke tests con `curl` y/o Postman).
+Deploy the 3 microservices (`wizard-service`, `inventory-service`, `duel-service`) to **Google Kubernetes Engine (GKE)** using images published to **Artifact Registry**, and validate that the APIs work (smoke tests with `curl` and/or Postman).
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía describe pasos en GCP + comandos `gcloud` y `kubectl`.
-- No modifica el código del repositorio.
-- Los manifiestos Kubernetes (`Deployment`, `Service`) se crean **fuera del repo**, en un directorio de trabajo local (ej. `~/hogwarts-gcp/k8s`), como archivos de configuración de infraestructura, no como parte del código fuente.
-- Asume que ya construiste y publicaste imágenes en Artifact Registry (ver `03_artifact_registry_and_builds.md`).
+- This guide describes steps in GCP + `gcloud` and `kubectl` commands.
+- It does not modify the repository code.
+- The Kubernetes manifests (`Deployment`, `Service`) are created **outside the repo**, in a local working directory (e.g. `~/hogwarts-gcp/k8s`), as infrastructure configuration files, not as part of the source code.
+- It assumes you have already built and published images to Artifact Registry (see `03_artifact_registry_and_builds.md`).
 
-### Los 3 microservicios a desplegar
+### The 3 microservices to deploy
 
-| Servicio | Imagen (Artifact Registry) | Puerto contenedor | Manifiesto |
+| Service | Image (Artifact Registry) | Container port | Manifest |
 |---|---|---|---|
-| `wizard-service` | `.../wizard-service` | 8080 | sección 4 |
-| `inventory-service` | `.../inventory-service` | 8080 | sección 5 |
-| `duel-service` | `.../duel-service` | 8080 | sección 6 |
+| `wizard-service` | `.../wizard-service` | 8080 | section 4 |
+| `inventory-service` | `.../inventory-service` | 8080 | section 5 |
+| `duel-service` | `.../duel-service` | 8080 | section 6 |
 
 ---
 
-## 0) Variables base
+## 0) Base variables
 
 ```bash
 export PROJECT_ID="hogwarts-dev-123"
@@ -35,8 +35,8 @@ export WIZARD_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/wizard-service"
 export INVENTORY_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/inventory-service"
 export DUEL_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/duel-service"
 
-# Versión a desplegar de cada servicio (tag semántico, ver guía 03 §4).
-# Ejecutar DESDE LA RAÍZ DEL REPO, antes del `cd` de abajo:
+# Version of each service to deploy (semantic tag, see guide 03 §4).
+# Run FROM THE REPO ROOT, before the `cd` below:
 export WIZARD_VERSION=$(grep '^version=' wizard-service/gradle.properties | cut -d= -f2)
 export INVENTORY_VERSION=$(grep '^version=' inventory-service/gradle.properties | cut -d= -f2)
 export DUEL_VERSION=$(grep '^version=' duel-service/gradle.properties | cut -d= -f2)
@@ -45,9 +45,9 @@ mkdir -p ~/hogwarts-gcp/k8s
 cd ~/hogwarts-gcp/k8s
 ```
 
-Los manifiestos de abajo referencian cada imagen con su tag de versión (ej. `wizard-service:1.4.0`), nunca `:latest`. Esa versión tiene que estar publicada en Artifact Registry (guía 03 §4.7) y no puede ser `-SNAPSHOT`: si `gradle.properties` está en un SNAPSHOT, exporta a mano la última versión publicada (ej. `export WIZARD_VERSION=1.4.0`).
+The manifests below reference each image with its version tag (e.g. `wizard-service:1.4.0`), never `:latest`. That version must be published to Artifact Registry (guide 03 §4.7) and cannot be a `-SNAPSHOT`: if `gradle.properties` is on a SNAPSHOT, export the last published version by hand (e.g. `export WIZARD_VERSION=1.4.0`).
 
-Si creaste el service account para Workload Identity (recomendado, ver guía `02`), lo usaremos más adelante:
+If you created the service account for Workload Identity (recommended, see guide `02`), we will use it later:
 
 ```bash
 export GKE_SA="hogwarts-gke-sa@$PROJECT_ID.iam.gserviceaccount.com"
@@ -55,46 +55,46 @@ export GKE_SA="hogwarts-gke-sa@$PROJECT_ID.iam.gserviceaccount.com"
 
 ---
 
-## 1) Conceptos GKE que necesitas
+## 1) GKE concepts you need
 
-Antes de crear nada, conviene tener claro cómo se relacionan las piezas que vas a usar en esta guía. De "más infraestructura" a "más aplicación", la jerarquía es:
+Before creating anything, it helps to be clear on how the pieces used in this guide relate to each other. From "more infrastructure" to "more application", the hierarchy is:
 
-**Cluster → Nodos → Pods → Deployment → Service**
+**Cluster → Nodes → Pods → Deployment → Service**
 
-- **Cluster**: es el conjunto completo que administras como una unidad — agrupa un *control plane* (el "cerebro" que Google gestiona por ti: API de Kubernetes, scheduler, etcd, etc.) y uno o más **nodos** donde realmente corren tus contenedores. Cuando ejecutas `gcloud container clusters create-auto`, estás creando este conjunto.
-- **Nodo**: es una máquina virtual (una VM de Compute Engine por debajo) que forma parte del cluster y tiene capacidad de CPU/memoria para alojar Pods. En **Standard** tú decides cuántos nodos y de qué tipo (`--num-nodes`, `--machine-type`); en **Autopilot** Google los crea y dimensiona automáticamente según lo que tus Pods pidan en `resources.requests`, y nunca interactúas con ellos directamente.
-- **Pod**: es la unidad más pequeña que se puede desplegar en Kubernetes. Contiene uno o más contenedores (en nuestro caso, siempre uno: el contenedor de cada microservicio) que comparten red e IP interna. Los Pods son efímeros — si uno se cae, no se "repara", se reemplaza por uno nuevo.
-- **Deployment**: es el objeto que tú declaras (en el YAML) y que le dice a Kubernetes "quiero `N` réplicas de este Pod, corriendo esta imagen, siempre así". El Deployment crea y vigila un **ReplicaSet**, que es quien efectivamente mantiene el número de Pods vivos y coordina los *rollouts* (actualizaciones progresivas) cuando cambias la imagen. Por eso `kubectl rollout status deployment/...` y `kubectl set image deployment/...` operan sobre el Deployment, no sobre los Pods directamente.
-- **Service**: los Pods se crean y destruyen constantemente (cada uno con su propia IP interna, que cambia), así que no te conectas a un Pod directamente. El **Service** agrupa a todos los Pods que coinciden con una etiqueta (`selector: app: wizard-service`) y les da una identidad de red estable. Esta guía usa el tipo `LoadBalancer`, que además le asigna una **IP pública externa** para las pruebas iniciales. (Otros tipos, como `ClusterIP`, solo son accesibles dentro del cluster — se usan en la guía `08` para la comunicación interna entre microservicios, y se mencionan también en la sección [10](#10-endurecimiento-mínimo-recomendación) como endurecimiento).
-- GKE tiene dos modos principales para administrar los nodos:
-  - **Autopilot**: Google administra nodos, escalado y parcheo. Pagas por Pod (por lo que reserva cada Pod en `resources.requests`), no por VM. Más simple y recomendado para empezar.
-  - **Standard**: tú administras el *node pool* (tamaño, tipo de máquina, cuántos nodos). Más control, más trabajo operativo.
-  - Esta guía usa **Autopilot** por defecto; se incluyen notas para Standard donde aplica.
-- Spring Boot escucha en el puerto `8080` por defecto. En el Deployment, `containerPort: 8080` declara ese puerto en el Pod; en el Service, `targetPort: 8080` apunta al mismo puerto del Pod mientras `port: 80` es el puerto que queda expuesto externamente (por eso las URLs de este doc no incluyen `:80`).
+- **Cluster**: the whole set you manage as a unit — it groups a *control plane* (the "brain" Google manages for you: Kubernetes API, scheduler, etcd, etc.) and one or more **nodes** where your containers actually run. When you run `gcloud container clusters create-auto`, you are creating this set.
+- **Node**: a virtual machine (a Compute Engine VM underneath) that is part of the cluster and has CPU/memory capacity to host Pods. In **Standard** you decide how many nodes and of which type (`--num-nodes`, `--machine-type`); in **Autopilot** Google creates and sizes them automatically based on what your Pods request in `resources.requests`, and you never interact with them directly.
+- **Pod**: the smallest deployable unit in Kubernetes. It contains one or more containers (in our case, always one: each microservice's container) that share networking and an internal IP. Pods are ephemeral — if one dies, it is not "repaired", it is replaced by a new one.
+- **Deployment**: the object you declare (in the YAML) that tells Kubernetes "I want `N` replicas of this Pod, running this image, always". The Deployment creates and watches a **ReplicaSet**, which is what actually keeps the number of Pods alive and coordinates *rollouts* (progressive updates) when you change the image. That is why `kubectl rollout status deployment/...` and `kubectl set image deployment/...` operate on the Deployment, not on the Pods directly.
+- **Service**: Pods are constantly created and destroyed (each with its own internal IP, which changes), so you don't connect to a Pod directly. The **Service** groups all Pods matching a label (`selector: app: wizard-service`) and gives them a stable network identity. This guide uses the `LoadBalancer` type, which also assigns an **external public IP** for the initial tests. (Other types, such as `ClusterIP`, are only reachable inside the cluster — they are used in guide `08` for internal communication between microservices, and are also mentioned in section [10](#10-minimum-hardening-recommendation) as hardening.)
+- GKE has two main modes for managing nodes:
+  - **Autopilot**: Google manages nodes, scaling and patching. You pay per Pod (for what each Pod reserves in `resources.requests`), not per VM. Simpler, and recommended to start.
+  - **Standard**: you manage the *node pool* (size, machine type, number of nodes). More control, more operational work.
+  - This guide uses **Autopilot** by default; notes for Standard are included where applicable.
+- Spring Boot listens on port `8080` by default. In the Deployment, `containerPort: 8080` declares that port on the Pod; in the Service, `targetPort: 8080` points to that same Pod port while `port: 80` is the port exposed externally (that is why the URLs in this doc do not include `:80`).
 
-El diagrama siguiente resume estas relaciones:
+The following diagram summarizes these relationships:
 
-![Conceptos GKE: Cluster, Nodos, Pods, Deployment y Service](diagrams/gke_concepts.svg)
+![GKE concepts: Cluster, Nodes, Pods, Deployment and Service](diagrams/gke_concepts.svg)
 
-*Lectura del diagrama: el cliente llama al **Service** (flecha gris, `HTTP :80`); el Service enruta ese tráfico (flechas azules, `selector: app=...`) hacia los **Pods**, que corren dentro de los **Nodos** agrupados en el **Cluster**. Por separado, el **Deployment** declara y vigila esas réplicas de Pods (flechas violeta punteadas) — no participa en el tráfico de red, solo en su ciclo de vida.*
+*Reading the diagram: the client calls the **Service** (gray arrow, `HTTP :80`); the Service routes that traffic (blue arrows, `selector: app=...`) to the **Pods**, which run inside the **Nodes** grouped in the **Cluster**. Separately, the **Deployment** declares and watches those Pod replicas (dashed purple arrows) — it takes no part in network traffic, only in their lifecycle.*
 
 ---
 
-## 2) Habilitar APIs y crear el cluster
+## 2) Enable APIs and create the cluster
 
-Esta sección da de alta el servicio de GKE en el proyecto y crea el **Cluster** del que habla la sección anterior — es decir, provisiona el control plane y (en modo Standard) los nodos que van a alojar los Pods. Después de este paso, `kubectl` necesita saber a cuál cluster conectarse y con qué credenciales, y conviene confirmar que la conexión realmente funciona antes de seguir.
+This section enables the GKE service on the project and creates the **Cluster** described in the previous section — that is, it provisions the control plane and (in Standard mode) the nodes that will host the Pods. After this step, `kubectl` needs to know which cluster to connect to and with which credentials, and it is worth confirming that the connection really works before moving on.
 
-### 2.1 Habilitar la API de GKE
+### 2.1 Enable the GKE API
 
-Las APIs de GCP están desactivadas por defecto en un proyecto nuevo; sin este paso, cualquier comando `gcloud container ...` fallaría con un error de permisos/API no habilitada. Es un paso único por proyecto (si ya la habilitaste antes, este comando es un no-op seguro).
+GCP APIs are disabled by default on a new project; without this step, any `gcloud container ...` command would fail with a permissions/API-not-enabled error. It is a one-time step per project (if you already enabled it, this command is a safe no-op).
 
 ```bash
 gcloud services enable container.googleapis.com
 ```
 
-### 2.2 Crear el cluster (Autopilot, recomendado)
+### 2.2 Create the cluster (Autopilot, recommended)
 
-Este es el comando que efectivamente crea el Cluster: GCP aprovisiona el control plane administrado y, en Autopilot, deja la gestión de nodos totalmente en manos de Google (se irán creando/ajustando según los Pods que despliegues más adelante, no hay nodos "vacíos" esperando).
+This is the command that actually creates the Cluster: GCP provisions the managed control plane and, in Autopilot, leaves node management entirely to Google (nodes are created/adjusted based on the Pods you deploy later; there are no "empty" nodes waiting).
 
 ```bash
 gcloud container clusters create-auto "$CLUSTER_NAME" \
@@ -102,11 +102,11 @@ gcloud container clusters create-auto "$CLUSTER_NAME" \
   --project="$PROJECT_ID"
 ```
 
-Nota: crear un cluster Autopilot puede tardar varios minutos.
+Note: creating an Autopilot cluster can take several minutes.
 
-### 2.2-bis Alternativa: cluster Standard
+### 2.2-bis Alternative: Standard cluster
 
-Mismo objetivo (crear el Cluster), pero aquí tú defines explícitamente el *node pool*: cuántas VMs (`--num-nodes`) y de qué tamaño (`--machine-type`) arrancan de entrada. Usa esto solo si necesitas ese control explícito sobre nodos (omite este paso si ya creaste el Autopilot de arriba — no puedes tener ambos con el mismo `$CLUSTER_NAME`).
+Same goal (create the Cluster), but here you explicitly define the *node pool*: how many VMs (`--num-nodes`) and of what size (`--machine-type`) start up front. Use this only if you need that explicit control over nodes (skip this step if you already created the Autopilot cluster above — you cannot have both with the same `$CLUSTER_NAME`).
 
 ```bash
 gcloud container clusters create "$CLUSTER_NAME" \
@@ -116,29 +116,29 @@ gcloud container clusters create "$CLUSTER_NAME" \
   --project="$PROJECT_ID"
 ```
 
-### 2.3 Obtener credenciales de `kubectl`
+### 2.3 Get `kubectl` credentials
 
-Crear el cluster no configura automáticamente tu `kubectl` local. Este comando descarga el endpoint y las credenciales del cluster y los guarda en `~/.kube/config`, para que los comandos `kubectl` de las siguientes secciones sepan a qué cluster apuntar (en vez de fallar o apuntar a otro contexto que tengas configurado).
+Creating the cluster does not automatically configure your local `kubectl`. This command downloads the cluster's endpoint and credentials and stores them in `~/.kube/config`, so the `kubectl` commands in the following sections know which cluster to target (instead of failing or targeting another context you may have configured).
 
-**Prerrequisito: `kubectl` y `gke-gcloud-auth-plugin`**
+**Prerequisite: `kubectl` and `gke-gcloud-auth-plugin`**
 
-Si ya instalaste `kubectl` y `gke-gcloud-auth-plugin` siguiendo la guía `00` (sección 2.2), este paso debería funcionar sin problemas. Si no, y ves el error:
+If you already installed `kubectl` and `gke-gcloud-auth-plugin` following guide `00` (section 2.2), this step should work without problems. If not, and you see the error:
 
 ```
 CRITICAL: ACTION REQUIRED: gke-gcloud-auth-plugin, which is needed for continued use of kubectl, was not found or is not executable.
 ```
 
-El `kubeconfig entry generated for ...` que aparece después **sí se generó igual** — el error es solo una advertencia de que ese kubeconfig no va a poder autenticarse todavía. Instala el plugin como se indica en `00_local_prerequisites_and_tools.md` y luego vuelve a ejecutar `get-credentials` para regenerar el kubeconfig:
+The `kubeconfig entry generated for ...` that appears afterwards **was still generated** — the error is only a warning that this kubeconfig cannot authenticate yet. Install the plugin as described in `00_local_prerequisites_and_tools.md` and then run `get-credentials` again to regenerate the kubeconfig:
 
 ```bash
 gcloud container clusters get-credentials "$CLUSTER_NAME" --region="$REGION" --project="$PROJECT_ID"
 ```
 
-(Si usaste el cluster Standard con `--zone`, reemplaza `--region` por `--zone` en el comando anterior.)
+(If you used the Standard cluster with `--zone`, replace `--region` with `--zone` in the command above.)
 
-### 2.4 Verificar acceso al cluster
+### 2.4 Verify access to the cluster
 
-Un chequeo rápido de que 2.2 y 2.3 funcionaron antes de invertir tiempo en los despliegues: `get nodes` confirma que hay nodos disponibles y accesibles (en Autopilot pueden tardar un poco en aparecer tras la creación), y `cluster-info` confirma que `kubectl` está hablando con el cluster correcto.
+A quick check that 2.2 and 2.3 worked before investing time in the deployments: `get nodes` confirms that there are nodes available and reachable (in Autopilot they may take a while to show up after creation), and `cluster-info` confirms that `kubectl` is talking to the right cluster.
 
 ```bash
 kubectl get nodes
@@ -147,11 +147,11 @@ kubectl cluster-info
 
 ---
 
-## 3) Permitir que GKE lea imágenes de Artifact Registry
+## 3) Allow GKE to read images from Artifact Registry
 
-Si el cluster y el repositorio de Artifact Registry están en el mismo proyecto, normalmente no necesitas configuración adicional: los nodos de GKE usan la cuenta de servicio de Compute Engine, que ya tiene acceso de lectura.
+If the cluster and the Artifact Registry repository are in the same project, you usually need no extra configuration: GKE nodes use the Compute Engine service account, which already has read access.
 
-Si usas un service account dedicado para los Pods (Workload Identity) o Artifact Registry está en otro proyecto, concede el rol de lector:
+If you use a dedicated service account for the Pods (Workload Identity) or Artifact Registry is in another project, grant the reader role:
 
 ```bash
 gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" \
@@ -162,11 +162,11 @@ gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" \
 
 ---
 
-## 4) Deploy de `wizard-service`
+## 4) Deploy `wizard-service`
 
-### 4.1 Manifiesto `Deployment` + `Service`
+### 4.1 `Deployment` + `Service` manifest
 
-Crea el archivo `wizard-service.yaml`:
+Create the `wizard-service.yaml` file:
 
 ```bash
 cat > wizard-service.yaml <<EOF
@@ -222,48 +222,48 @@ spec:
 EOF
 ```
 
-Notas:
+Notes:
 
-- Ajusta o quita `readinessProbe` si el microservicio no expone Actuator (`/actuator/health`).
-- `resources` son valores de ejemplo; ajústalos según el consumo real del servicio.
+- Adjust or remove `readinessProbe` if the microservice does not expose Actuator (`/actuator/health`).
+- The `resources` are example values; adjust them to the service's actual consumption.
 
-### 4.2 Aplicar el manifiesto
+### 4.2 Apply the manifest
 
 ```bash
 kubectl apply -f wizard-service.yaml
 ```
 
-### 4.3 Verificar el rollout
+### 4.3 Verify the rollout
 
 ```bash
 kubectl rollout status deployment/wizard-service
 kubectl get pods -l app=wizard-service
 ```
 
-### 4.4 Obtener la IP externa del servicio
+### 4.4 Get the service's external IP
 
-La asignación de IP externa puede tardar 1-2 minutos:
+Assigning the external IP can take 1-2 minutes:
 
 ```bash
 kubectl get service wizard-service --watch
 ```
 
-Cuando `EXTERNAL-IP` deje de decir `<pending>`, sal con `Ctrl+C` y guarda la URL:
+When `EXTERNAL-IP` no longer says `<pending>`, exit with `Ctrl+C` and save the URL:
 
 ```bash
 export WIZARD_URL="http://$(kubectl get service wizard-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 echo "$WIZARD_URL"
 ```
 
-### 4.5 Smoke tests con `curl`
+### 4.5 Smoke tests with `curl`
 
-Listar wizards (paginado):
+List wizards (paginated):
 
 ```bash
 curl -sS "$WIZARD_URL/api/wizards?page=0&size=20&sort=id,desc"
 ```
 
-Crear wizard:
+Create a wizard:
 
 ```bash
 curl -sS -X POST "$WIZARD_URL/api/wizards" \
@@ -271,7 +271,7 @@ curl -sS -X POST "$WIZARD_URL/api/wizards" \
   -d '{"name":"Harry Potter","house":"Gryffindor"}'
 ```
 
-Obtener por id (ejemplo `1`):
+Get by id (example `1`):
 
 ```bash
 curl -sS "$WIZARD_URL/api/wizards/1"
@@ -279,9 +279,9 @@ curl -sS "$WIZARD_URL/api/wizards/1"
 
 ---
 
-## 5) Deploy de `inventory-service`
+## 5) Deploy `inventory-service`
 
-### 5.1 Manifiesto
+### 5.1 Manifest
 
 ```bash
 cat > inventory-service.yaml <<EOF
@@ -337,14 +337,14 @@ spec:
 EOF
 ```
 
-### 5.2 Aplicar y verificar
+### 5.2 Apply and verify
 
 ```bash
 kubectl apply -f inventory-service.yaml
 kubectl rollout status deployment/inventory-service
 ```
 
-### 5.3 Obtener URL
+### 5.3 Get the URL
 
 ```bash
 kubectl get service inventory-service --watch
@@ -357,7 +357,7 @@ echo "$INVENTORY_URL"
 
 ### 5.4 Smoke tests
 
-Crear wand:
+Create a wand:
 
 ```bash
 curl -sS -X POST "$INVENTORY_URL/api/inventory/wands" \
@@ -365,13 +365,13 @@ curl -sS -X POST "$INVENTORY_URL/api/inventory/wands" \
   -d '{"wood":"Holly","core":"Phoenix feather","length":11.0,"description":"Example wand"}'
 ```
 
-Listar wands:
+List wands:
 
 ```bash
 curl -sS "$INVENTORY_URL/api/inventory/wands?page=0&size=20&sort=id,desc"
 ```
 
-Asignar wand a wizard (ejemplo wand `1` → wizard `1`):
+Assign a wand to a wizard (example wand `1` → wizard `1`):
 
 ```bash
 curl -sS -X POST "$INVENTORY_URL/api/inventory/wands/1/assign" \
@@ -381,9 +381,9 @@ curl -sS -X POST "$INVENTORY_URL/api/inventory/wands/1/assign" \
 
 ---
 
-## 6) Deploy de `duel-service`
+## 6) Deploy `duel-service`
 
-### 6.1 Manifiesto
+### 6.1 Manifest
 
 ```bash
 cat > duel-service.yaml <<EOF
@@ -439,14 +439,14 @@ spec:
 EOF
 ```
 
-### 6.2 Aplicar y verificar
+### 6.2 Apply and verify
 
 ```bash
 kubectl apply -f duel-service.yaml
 kubectl rollout status deployment/duel-service
 ```
 
-### 6.3 Obtener URL
+### 6.3 Get the URL
 
 ```bash
 kubectl get service duel-service --watch
@@ -459,7 +459,7 @@ echo "$DUEL_URL"
 
 ### 6.4 Smoke tests
 
-Crear duelo:
+Create a duel:
 
 ```bash
 curl -sS -X POST "$DUEL_URL/api/duels" \
@@ -467,7 +467,7 @@ curl -sS -X POST "$DUEL_URL/api/duels" \
   -d '{"attackerId":1,"defenderId":2}'
 ```
 
-Obtener duelo:
+Get a duel:
 
 ```bash
 curl -sS "$DUEL_URL/api/duels/1"
@@ -475,23 +475,23 @@ curl -sS "$DUEL_URL/api/duels/1"
 
 ---
 
-## 7) Pruebas con Postman (recomendado)
+## 7) Testing with Postman (recommended)
 
-1. Importa `Hogwarts_API.postman_collection.json`.
-2. Define variables de entorno:
+1. Import `Hogwarts_API.postman_collection.json`.
+2. Define environment variables:
    - `wizardBaseUrl` = `WIZARD_URL`
    - `inventoryBaseUrl` = `INVENTORY_URL`
    - `duelBaseUrl` = `DUEL_URL`
-3. Ejecuta requests en orden:
+3. Run the requests in order:
    - Create Wizard / List Wizards
    - Create Wand / Assign Wand
    - Create Duel / Get Duel
 
 ---
 
-## 8) Logs y verificación desde Cloud Console / `kubectl`
+## 8) Logs and verification from Cloud Console / `kubectl`
 
-Ver estado general:
+Check the overall status:
 
 ```bash
 kubectl get deployments
@@ -499,58 +499,58 @@ kubectl get pods
 kubectl get services
 ```
 
-Ver logs de un Pod (reemplaza `<pod-name>` por el nombre real, ej. `wizard-service-xxxxxxxxxx-yyyyy`):
+View a Pod's logs (replace `<pod-name>` with the real name, e.g. `wizard-service-xxxxxxxxxx-yyyyy`):
 
 ```bash
 kubectl get pods -l app=wizard-service
 kubectl logs <pod-name>
 ```
 
-Seguir logs en vivo:
+Follow logs live:
 
 ```bash
 kubectl logs -f <pod-name>
 ```
 
-También puedes ver logs agregados en Cloud Console → Logging → filtrando por `resource.type="k8s_container"` y `resource.labels.cluster_name="$CLUSTER_NAME"`, o en Cloud Console → Kubernetes Engine → Workloads → (servicio) → Logs.
+You can also view aggregated logs in Cloud Console → Logging → filtering by `resource.type="k8s_container"` and `resource.labels.cluster_name="$CLUSTER_NAME"`, or in Cloud Console → Kubernetes Engine → Workloads → (service) → Logs.
 
 ---
 
-## 9) Actualizar una imagen ya desplegada
+## 9) Update an already deployed image
 
-Cuando publiques una versión nueva de la imagen (flujo de release en `03_artifact_registry_and_builds.md` §4.6), apunta el `Deployment` a su tag semántico:
+When you publish a new version of the image (release flow in `03_artifact_registry_and_builds.md` §4.6), point the `Deployment` at its semantic tag:
 
 ```bash
-export WIZARD_VERSION=1.4.0   # la versión recién publicada
+export WIZARD_VERSION=1.4.0   # the version just published
 kubectl set image deployment/wizard-service wizard-service="$WIZARD_IMAGE:$WIZARD_VERSION"
 kubectl rollout status deployment/wizard-service
 ```
 
-Como cada versión tiene su propio tag, el cambio de tag es lo que dispara el rollout: no hace falta `kubectl rollout restart`. Para volver a una versión anterior, usa el mismo comando con el tag anterior (ver guía 03 §4.8).
+Since each version has its own tag, the tag change is what triggers the rollout: no `kubectl rollout restart` is needed. To go back to a previous version, use the same command with the previous tag (see guide 03 §4.8).
 
-`kubectl set image` cambia el `Deployment` en el clúster, pero no tu `wizard-service.yaml` local. Si más adelante vuelves a aplicar ese archivo, regenera el manifiesto con la versión actual para no volver a una imagen vieja sin querer.
+`kubectl set image` changes the `Deployment` in the cluster, but not your local `wizard-service.yaml`. If you apply that file again later, regenerate the manifest with the current version so you don't accidentally go back to an old image.
 
-Repite lo mismo (con el nombre y la versión correspondientes) para `inventory-service` y `duel-service`.
-
----
-
-## 10) Endurecimiento mínimo (recomendación)
-
-Cuando ya verificaste que funcionan:
-
-- Reemplazar los `Service` de tipo `LoadBalancer` (uno por microservicio, cada uno con IP pública propia) por:
-  - Un único `Ingress` (con Ingress Controller de GKE) que exponga las rutas necesarias, o
-  - `Service` de tipo `ClusterIP` + API Gateway al frente (ver guía `09_api_security_identity_platform.md`).
-- Definir `NetworkPolicy` para restringir qué Pods pueden hablar entre sí.
-- Usar **Workload Identity** para que cada Pod tenga el mínimo de permisos IAM necesarios, en vez de la cuenta de servicio default de los nodos.
-- Configurar `HorizontalPodAutoscaler` por microservicio si esperas carga variable.
-- Definir `requests`/`limits` de CPU y memoria ajustados a mediciones reales (no los valores de ejemplo de esta guía).
+Repeat the same (with the corresponding name and version) for `inventory-service` and `duel-service`.
 
 ---
 
-## 11) Eliminar recursos (para no seguir pagando)
+## 10) Minimum hardening (recommendation)
 
-Si esta guía fue solo para pruebas, elimina los recursos cuando termines:
+Once you have verified that they work:
+
+- Replace the `LoadBalancer` `Service`s (one per microservice, each with its own public IP) with:
+  - A single `Ingress` (with the GKE Ingress Controller) that exposes the required routes, or
+  - `ClusterIP` `Service`s + an API Gateway in front (see guide `09_api_security_identity_platform.md`).
+- Define `NetworkPolicy` objects to restrict which Pods can talk to each other.
+- Use **Workload Identity** so that each Pod has the minimum IAM permissions it needs, instead of the nodes' default service account.
+- Configure a `HorizontalPodAutoscaler` per microservice if you expect variable load.
+- Set CPU and memory `requests`/`limits` based on real measurements (not this guide's example values).
+
+---
+
+## 11) Delete resources (to stop paying)
+
+If this guide was only for testing, delete the resources when you are done:
 
 ```bash
 kubectl delete -f wizard-service.yaml
@@ -560,4 +560,4 @@ kubectl delete -f duel-service.yaml
 gcloud container clusters delete "$CLUSTER_NAME" --region="$REGION" --project="$PROJECT_ID"
 ```
 
-**Importante**: eliminar el cluster borra todos los workloads que corren en él; asegúrate de no necesitarlos antes de ejecutar el comando anterior.
+**Important**: deleting the cluster removes all workloads running on it; make sure you don't need them before running the command above.

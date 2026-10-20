@@ -1,44 +1,44 @@
-## 06 — Base de datos en GCP (Cloud SQL PostgreSQL)
+## 06 — Database on GCP (Cloud SQL PostgreSQL)
 
-### Objetivo
+### Goal
 
-Crear una instancia **Cloud SQL for PostgreSQL** y definir cómo migrar los microservicios a usarla (configuración en GCP + ajustes que serían necesarios en la app), incluyendo verificación de conectividad y consideraciones de producción (backups, HA, seguridad).
+Create a **Cloud SQL for PostgreSQL** instance and define how to move the microservices onto it (configuration in GCP + the changes the app would need), including connectivity checks and production considerations (backups, HA, security).
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía describe pasos en GCP y configuración de los Pods de GKE.
-- **No modifica el código** del repositorio.
-- Los "ajustes en código" se describen como **instrucciones** para que tú los apliques si corresponde.
+- This guide describes steps in GCP and the configuration of the GKE Pods.
+- It **does not modify the repository code**.
+- The "code changes" are described as **instructions** for you to apply if appropriate.
 
-### Resumen visual: cómo se conecta cada Pod a Cloud SQL
+### Visual summary: how each Pod connects to Cloud SQL
 
 ```mermaid
 flowchart LR
-    subgraph Pod["Pod (ej. wizard-service)"]
-      APP["Contenedor app<br/>(Spring Boot, puerto 8080)"]
+    subgraph Pod["Pod (e.g. wizard-service)"]
+      APP["App container<br/>(Spring Boot, port 8080)"]
       PROXY["Sidecar: Cloud SQL<br/>Auth Proxy"]
       APP -->|"localhost:5432"| PROXY
     end
-    PROXY -->|"conexión cifrada<br/>IAM (roles/cloudsql.client)"| SQL[("Cloud SQL<br/>PostgreSQL")]
+    PROXY -->|"encrypted connection<br/>IAM (roles/cloudsql.client)"| SQL[("Cloud SQL<br/>PostgreSQL")]
 ```
 
 ---
 
-## 0) Contexto del repo
+## 0) Repo context
 
-Los microservicios usan `spring-boot-starter-data-jpa` y actualmente incluyen `runtimeOnly 'com.h2database:h2'`. No hay `spring.datasource.*` en `application.properties`, por lo que el datasource se asume por defecto (H2 in-memory en runtime).
+The microservices use `spring-boot-starter-data-jpa` and currently include `runtimeOnly 'com.h2database:h2'`. There is no `spring.datasource.*` in `application.properties`, so the datasource is the default one (in-memory H2 at runtime).
 
-Migrar a Cloud SQL implica:
+Moving to Cloud SQL involves:
 
-- Provisionar Cloud SQL (PostgreSQL)
-- Definir DB(s) y users
-- Conectar los Pods de GKE a Cloud SQL (Cloud SQL Auth Proxy como sidecar)
-- Configurar credenciales con Secret Manager
-- (Recomendado) incorporar migraciones (Flyway/Liquibase) para esquema reproducible
+- Provisioning Cloud SQL (PostgreSQL)
+- Defining the DB(s) and users
+- Connecting the GKE Pods to Cloud SQL (Cloud SQL Auth Proxy as a sidecar)
+- Configuring credentials with Secret Manager
+- (Recommended) adding migrations (Flyway/Liquibase) for a reproducible schema
 
 ---
 
-## 1) Variables y decisiones
+## 1) Variables and decisions
 
 Define:
 
@@ -48,39 +48,39 @@ export REGION="us-central1"
 export GKE_SA="hogwarts-gke-sa@$PROJECT_ID.iam.gserviceaccount.com"
 ```
 
-### 1.1 Una instancia vs varias instancias
+### 1.1 One instance vs multiple instances
 
-Opciones comunes:
+Common options:
 
-- **Opción A (simple)**: 1 instancia Cloud SQL y **3 bases de datos** (una por microservicio)
+- **Option A (simple)**: 1 Cloud SQL instance and **3 databases** (one per microservice)
   - `wizard_db`, `inventory_db`, `duel_db`
-- **Opción B (aislamiento)**: 1 instancia por microservicio
+- **Option B (isolation)**: 1 instance per microservice
 
-Para un entorno dev/stg, normalmente **Opción A** es suficiente.
+For a dev/stg environment, **Option A** is usually enough.
 
 ---
 
-## 2) Crear instancia Cloud SQL (PostgreSQL)
+## 2) Create the Cloud SQL (PostgreSQL) instance
 
-### 2.1 Habilitar API (si no lo hiciste)
+### 2.1 Enable the API (if you haven't already)
 
 ```bash
 gcloud services enable sqladmin.googleapis.com
 ```
 
-### 2.2 Crear instancia (ejemplo)
+### 2.2 Create the instance (example)
 
-Elige:
+Choose:
 
 - `INSTANCE_ID`: `hogwarts-postgres`
-- Versión: PostgreSQL (elige una soportada por tu estándar)
-- Región: idealmente la misma que el cluster GKE (`REGION`)
+- Version: PostgreSQL (pick one supported by your standards)
+- Region: ideally the same as the GKE cluster (`REGION`)
 
-El costo de Cloud SQL depende principalmente de: `--tier` (vCPU/RAM), `--storage-size`, `--storage-type` y `--availability-type` (si hay standby en otra zona, el costo aproximadamente se duplica). A continuación, tres configuraciones de ejemplo según presupuesto — **son puntos de partida, no valores fijos**: ajusta según carga real y precios vigentes en tu región.
+Cloud SQL cost depends mainly on: `--tier` (vCPU/RAM), `--storage-size`, `--storage-type` and `--availability-type` (a standby in another zone roughly doubles the cost). Below are three example configurations by budget — **they are starting points, not fixed values**: adjust them to your real load and the current prices in your region.
 
-#### Opción básica (mínimo costo — dev/pruebas)
+#### Basic option (minimum cost — dev/testing)
 
-Machine type *shared-core* (vCPU compartida entre varias instancias del host), sin HA. Suficiente para desarrollo, demos o entornos que se prenden/apagan. **No recomendado para producción**: sin garantías de rendimiento consistente y sin resiliencia ante caída de zona.
+*Shared-core* machine type (vCPU shared among several instances on the host), no HA. Enough for development, demos or environments that are turned on and off. **Not recommended for production**: no guarantee of consistent performance and no resilience to a zone outage.
 
 ```bash
 export INSTANCE_ID="hogwarts-postgres"
@@ -95,9 +95,9 @@ gcloud sql instances create "$INSTANCE_ID" \
   --backup-start-time=03:00
 ```
 
-#### Opción media (balance costo/rendimiento — staging o producción con tráfico bajo/medio)
+#### Medium option (cost/performance balance — staging or production with low/medium traffic)
 
-Machine type *dedicated-core* (vCPU dedicada, rendimiento predecible), zonal (sin standby). Es el escalón razonable cuando la instancia ya sirve tráfico real pero no justifica el costo de HA todavía.
+*Dedicated-core* machine type (dedicated vCPU, predictable performance), zonal (no standby). It is the reasonable next step when the instance already serves real traffic but does not yet justify the cost of HA.
 
 ```bash
 export INSTANCE_ID="hogwarts-postgres"
@@ -113,9 +113,9 @@ gcloud sql instances create "$INSTANCE_ID" \
   --backup-start-time=03:00
 ```
 
-#### Opción avanzada (producción crítica — presupuesto amplio)
+#### Advanced option (critical production — generous budget)
 
-Dedicated-core con más vCPU/RAM, SSD, **alta disponibilidad regional** (`--availability-type=REGIONAL`: mantiene una réplica standby en otra zona con failover automático — esto es lo que más impacta el costo) y point-in-time recovery habilitado para poder restaurar a cualquier momento dentro de la ventana de retención de logs de transacción.
+Dedicated-core with more vCPU/RAM, SSD, **regional high availability** (`--availability-type=REGIONAL`: keeps a standby replica in another zone with automatic failover — this has the largest cost impact) and point-in-time recovery enabled, so you can restore to any moment within the transaction log retention window.
 
 ```bash
 export INSTANCE_ID="hogwarts-postgres"
@@ -132,42 +132,42 @@ gcloud sql instances create "$INSTANCE_ID" \
   --enable-point-in-time-recovery
 ```
 
-#### Comparación
+#### Comparison
 
-| | Básica | Media | Avanzada |
+| | Basic | Medium | Advanced |
 |---|---|---|---|
 | `--tier` | `db-f1-micro` (shared-core) | `db-custom-2-8192` (2 vCPU / 8 GB) | `db-custom-4-16384` (4 vCPU / 16 GB) |
 | Storage | 10 GB HDD | 50 GB SSD + auto-increase | 100 GB SSD + auto-increase |
-| Disponibilidad | Zonal (sin standby) | Zonal (sin standby) | **Regional** (standby + failover automático) |
-| Point-in-time recovery | No | No (opcional) | Sí |
-| **Precio estimado** | **~US$10–15/mes** | **~US$110–120/mes** | **~US$430–450/mes** |
-| Uso recomendado | Dev/demos, entornos efímeros | Staging, prod con tráfico bajo/medio | Prod crítica, SLA de disponibilidad exigente |
+| Availability | Zonal (no standby) | Zonal (no standby) | **Regional** (standby + automatic failover) |
+| Point-in-time recovery | No | No (optional) | Yes |
+| **Estimated price** | **~US$10–15/month** | **~US$110–120/month** | **~US$430–450/month** |
+| Recommended use | Dev/demos, ephemeral environments | Staging, prod with low/medium traffic | Critical prod, demanding availability SLA |
 
-**Cómo se calculó cada estimado** (edición Enterprise, `us-central1`, on-demand — sin descuentos por compromiso):
+**How each estimate was calculated** (Enterprise edition, `us-central1`, on-demand — no commitment discounts):
 
-- **Básica**: `db-f1-micro` es shared-core y se cobra como tarifa fija (~US$8–10/mes) en vez de por vCPU/RAM, más 10 GB de HDD zonal (~US$0.12/GB-mes) ≈ US$1.2/mes. Total ≈ **US$10–15/mes**.
-- **Media**: dedicated-core se cobra por recurso: ~US$0.0413/vCPU-hora y ~US$0.007/GB RAM-hora (≈ US$30/vCPU-mes y US$5/GB-mes). Para 2 vCPU + 8 GB → (2×30) + (8×5) ≈ US$100/mes de cómputo, más 50 GB SSD zonal (~US$0.22/GB-mes) ≈ US$11/mes. Total ≈ **US$110–120/mes**.
-- **Avanzada**: mismos precios por recurso pero con `--availability-type=REGIONAL`, que **aproximadamente duplica el costo de cómputo** (paga la instancia principal + el standby en otra zona). Para 4 vCPU + 16 GB → (4×30 + 16×5) × 2 ≈ US$400/mes de cómputo, más 100 GB SSD con HA (~US$0.34/GB-mes) ≈ US$34/mes. Total ≈ **US$430–450/mes**.
+- **Basic**: `db-f1-micro` is shared-core and is billed at a flat rate (~US$8–10/month) instead of per vCPU/RAM, plus 10 GB of zonal HDD (~US$0.12/GB-month) ≈ US$1.2/month. Total ≈ **US$10–15/month**.
+- **Medium**: dedicated-core is billed per resource: ~US$0.0413/vCPU-hour and ~US$0.007/GB RAM-hour (≈ US$30/vCPU-month and US$5/GB-month). For 2 vCPU + 8 GB → (2×30) + (8×5) ≈ US$100/month of compute, plus 50 GB of zonal SSD (~US$0.22/GB-month) ≈ US$11/month. Total ≈ **US$110–120/month**.
+- **Advanced**: same per-resource prices but with `--availability-type=REGIONAL`, which **roughly doubles the compute cost** (you pay for the primary instance + the standby in another zone). For 4 vCPU + 16 GB → (4×30 + 16×5) × 2 ≈ US$400/month of compute, plus 100 GB of SSD with HA (~US$0.34/GB-month) ≈ US$34/month. Total ≈ **US$430–450/month**.
 
-⚠️ **Son estimados orientativos**, no una cotización: excluyen backups (almacenamiento de backups se cobra aparte), egress de red, Secret Manager, el costo del cluster GKE, y pueden variar por cambios de lista de precios de Google o por región. Para un número exacto usa la [calculadora oficial de GCP](https://cloud.google.com/products/calculator) o `gcloud sql instances describe`. Committed Use Discounts (compromiso de 1 o 3 años) pueden reducir el costo de cómputo entre 25% y 55%, pero no aplican a `db-f1-micro`.
+⚠️ **These are rough estimates**, not a quote: they exclude backups (backup storage is billed separately), network egress, Secret Manager and the GKE cluster cost, and they may vary with changes to Google's price list or by region. For an exact number use the [official GCP calculator](https://cloud.google.com/products/calculator) or `gcloud sql instances describe`. Committed Use Discounts (1- or 3-year commitment) can reduce the compute cost by 25% to 55%, but do not apply to `db-f1-micro`.
 
-Notas:
+Notes:
 
-- Ajusta `--tier` según tu carga y presupuesto — estos son valores de ejemplo, no una recomendación de dimensionamiento formal.
-- Configura backups desde el inicio (mínimo en ambientes no efímeros), independientemente de la opción elegida.
-- `--availability-type=REGIONAL` es el cambio individual con mayor impacto en costo; evalúa si el SLA del proyecto realmente lo requiere antes de habilitarlo.
-- Es posible migrar de una opción a otra más adelante (`gcloud sql instances patch`), aunque cambiar `--tier` o `--availability-type` implica un reinicio breve de la instancia.
+- Adjust `--tier` to your load and budget — these are example values, not a formal sizing recommendation.
+- Configure backups from the start (at least in non-ephemeral environments), whichever option you choose.
+- `--availability-type=REGIONAL` is the single change with the largest cost impact; assess whether the project's SLA really requires it before enabling it.
+- You can move from one option to another later (`gcloud sql instances patch`), although changing `--tier` or `--availability-type` causes a brief instance restart.
 
-#### ¿Hay una opción gratuita?
+#### Is there a free option?
 
-**No existe un "always free" permanente para Cloud SQL** (a diferencia de otros servicios de GCP como Compute Engine `e2-micro`, 5 GB de Cloud Storage o el free tier de BigQuery/Firestore). Sí existen dos formas de probarlo sin costo, ambas **temporales**:
+**There is no permanent "always free" tier for Cloud SQL** (unlike other GCP services such as Compute Engine `e2-micro`, 5 GB of Cloud Storage or the BigQuery/Firestore free tier). There are two ways to try it at no cost, both **temporary**:
 
-- **Free trial instance de Cloud SQL**: una instancia gratis por **30 días** (con 90 días adicionales de gracia sin costo si no se actualiza, antes de programarse su eliminación). Viene con una configuración fija — Enterprise Plus, N2 de **8 vCPU / 64 GB RAM**, 100 GB de storage — es decir, **más potente que cualquiera de las tres opciones de arriba**, pero pensada solo para evaluar la herramienta: una instancia por proyecto, sin SLA, sin backups completos (solo uno final al eliminarla), sin réplicas de lectura, sin poder modificar la configuración ni escalar, y requiere tener un método de pago habilitado en el proyecto (aunque no se cobra mientras dure la prueba). ([Guía oficial](https://docs.cloud.google.com/sql/docs/postgres/free-trial-instance))
-- **Crédito de bienvenida de GCP**: cuentas nuevas reciben US$300 de crédito válidos por 90 días, utilizable en Cloud SQL (y en cualquier otro servicio) — es crédito general de la cuenta, no algo específico de Cloud SQL, y se agota como cualquier gasto normal.
+- **Cloud SQL free trial instance**: a free instance for **30 days** (with an additional 90-day grace period at no cost if not upgraded, before it is scheduled for deletion). It comes with a fixed configuration — Enterprise Plus, N2 with **8 vCPU / 64 GB RAM**, 100 GB of storage — that is, **more powerful than any of the three options above**, but meant only to evaluate the product: one instance per project, no SLA, no full backups (only a final one when it is deleted), no read replicas, no way to change the configuration or scale, and it requires a payment method on the project (although nothing is charged during the trial). ([Official guide](https://docs.cloud.google.com/sql/docs/postgres/free-trial-instance))
+- **GCP welcome credit**: new accounts receive US$300 of credit valid for 90 days, usable on Cloud SQL (and any other service) — it is general account credit, not something specific to Cloud SQL, and it is used up like any normal spending.
 
-Para desarrollo local sin ningún costo y sin límite de tiempo, la alternativa dentro del alcance de este repo es la que ya usa el proyecto: **H2 en memoria** (ver sección "0) Contexto del repo" más arriba) o correr Postgres en un contenedor Docker local — ninguna de las dos pasa por Cloud SQL ni por GCP.
+For local development at no cost and with no time limit, the alternative within the scope of this repo is the one the project already uses: **in-memory H2** (see section "0) Repo context" above) or running Postgres in a local Docker container — neither goes through Cloud SQL or GCP.
 
-### 2.3 Verificar instancia
+### 2.3 Verify the instance
 
 ```bash
 gcloud sql instances describe "$INSTANCE_ID"
@@ -175,9 +175,9 @@ gcloud sql instances describe "$INSTANCE_ID"
 
 ---
 
-## 3) Crear bases de datos y usuarios
+## 3) Create databases and users
 
-### 3.1 Crear bases de datos (una por servicio)
+### 3.1 Create the databases (one per service)
 
 ```bash
 gcloud sql databases create wizard_db --instance="$INSTANCE_ID"
@@ -185,15 +185,15 @@ gcloud sql databases create inventory_db --instance="$INSTANCE_ID"
 gcloud sql databases create duel_db --instance="$INSTANCE_ID"
 ```
 
-Verifica:
+Check:
 
 ```bash
 gcloud sql databases list --instance="$INSTANCE_ID"
 ```
 
-### 3.2 Crear usuarios
+### 3.2 Create the users
 
-Recomendación: un usuario por servicio.
+Recommendation: one user per service.
 
 ```bash
 gcloud sql users create wizard_user --instance="$INSTANCE_ID" --password="$WIZARD_DB_PASSWORD"
@@ -201,26 +201,26 @@ gcloud sql users create inventory_user --instance="$INSTANCE_ID" --password="$IN
 gcloud sql users create duel_user --instance="$INSTANCE_ID" --password="$DUEL_DB_PASSWORD"
 ```
 
-**Importante**: en vez de escribir passwords en la terminal, en entornos reales usa Secret Manager (ver guía `05`) y procedimientos de rotación.
+**Important**: instead of typing passwords in the terminal, use Secret Manager (see guide `05`) and rotation procedures in real environments.
 
 ---
 
-## 4) Conexión desde GKE a Cloud SQL (Cloud SQL Auth Proxy como sidecar)
+## 4) Connecting from GKE to Cloud SQL (Cloud SQL Auth Proxy as a sidecar)
 
-En GKE, el patrón estándar para conectar a Cloud SQL es correr el **Cloud SQL Auth Proxy** como un contenedor adicional (sidecar) dentro del mismo Pod que la app. El proxy abre un socket local (`127.0.0.1:5432`) que la app usa como si fuera un Postgres local; el proxy se encarga de la conexión cifrada y autenticada contra Cloud SQL.
+On GKE, the standard pattern to connect to Cloud SQL is to run the **Cloud SQL Auth Proxy** as an extra container (sidecar) in the same Pod as the app. The proxy opens a local socket (`127.0.0.1:5432`) that the app uses as if it were a local Postgres; the proxy handles the encrypted, authenticated connection to Cloud SQL.
 
-### 4.1 Obtener `INSTANCE_CONNECTION_NAME`
+### 4.1 Get `INSTANCE_CONNECTION_NAME`
 
-Es el identificador que usa el proxy para asociarse a la instancia de Cloud SQL.
+It is the identifier the proxy uses to attach to the Cloud SQL instance.
 
 ```bash
 export INSTANCE_CONNECTION_NAME="$(gcloud sql instances describe "$INSTANCE_ID" --format='value(connectionName)')"
 echo "$INSTANCE_CONNECTION_NAME"
 ```
 
-### 4.2 Conceder permisos de conexión al service account de Workload Identity
+### 4.2 Grant connection permissions to the Workload Identity service account
 
-El GSA que usan los Pods debe tener `roles/cloudsql.client`:
+The GSA used by the Pods must have `roles/cloudsql.client`:
 
 ```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -228,15 +228,15 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --role="roles/cloudsql.client"
 ```
 
-### 4.3 Agregar el sidecar al manifiesto de cada `Deployment`
+### 4.3 Add the sidecar to each `Deployment` manifest
 
-En el `Deployment` de cada microservicio (ver guía `04`), agrega un segundo contenedor junto al de la app:
+In each microservice's `Deployment` (see guide `04`), add a second container next to the app's:
 
 ```yaml
 containers:
   - name: wizard-service
     image: REGION-docker.pkg.dev/PROJECT_ID/hogwarts-docker/wizard-service:VERSION
-    # ...contenedor de la app, sin cambios...
+    # ...app container, unchanged...
   - name: cloud-sql-proxy
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.x
     args:
@@ -250,85 +250,85 @@ containers:
       runAsNonRoot: true
 ```
 
-El Pod debe usar una `ServiceAccount` de Kubernetes asociada vía Workload Identity a `$GKE_SA`, igual que para Secret Manager (guía `05`). La app apunta su `spring.datasource.url` a `jdbc:postgresql://127.0.0.1:5432/<DB_NAME>` (ajuste de configuración, no de código — ver sección 6).
+The Pod must use a Kubernetes `ServiceAccount` bound via Workload Identity to `$GKE_SA`, just like for Secret Manager (guide `05`). The app points its `spring.datasource.url` to `jdbc:postgresql://127.0.0.1:5432/<DB_NAME>` (a configuration change, not a code change — see section 6).
 
-Repite el mismo patrón de sidecar para `inventory-service` y `duel-service`.
+Repeat the same sidecar pattern for `inventory-service` and `duel-service`.
 
 ---
 
-## 5) Secret Manager: guardar credenciales DB
+## 5) Secret Manager: store the DB credentials
 
-Guarda (por microservicio):
+Store (per microservice):
 
 - DB name
 - user
 - password
-- (si aplica) URL/propiedades de conexión
+- (if applicable) connection URL/properties
 
-Ejemplo (conceptual; ver guía `05` para comandos exactos):
+Example (conceptual; see guide `05` for the exact commands):
 
 - `wizard-db-name` = `wizard_db`
 - `wizard-db-user` = `wizard_user`
 - `wizard-db-password` = `...`
 
-Luego inyéctalas en el Pod con el Secret Manager CSI driver o un `Secret` de Kubernetes (ver guía `05`, sección 4).
+Then inject them into the Pod with the Secret Manager CSI driver or a Kubernetes `Secret` (see guide `05`, section 4).
 
 ---
 
-## 6) Ajustes necesarios en la aplicación (solo instrucciones, sin modificar este repo)
+## 6) Required application changes (instructions only, without modifying this repo)
 
-Para que Spring Boot use Postgres en vez de H2, típicamente necesitas:
+For Spring Boot to use Postgres instead of H2, you typically need to:
 
-### 6.1 Cambiar driver runtime
+### 6.1 Change the runtime driver
 
-- Remover H2 del runtime y usar el driver de Postgres.
+- Remove H2 from the runtime and use the Postgres driver.
 
-### 6.2 Configurar datasource
+### 6.2 Configure the datasource
 
-Dependiendo del enfoque, hay 2 formas comunes:
+Depending on the approach, there are 2 common ways:
 
-#### Enfoque A (recomendado en GKE): TCP al sidecar Cloud SQL Auth Proxy
+#### Approach A (recommended on GKE): TCP to the Cloud SQL Auth Proxy sidecar
 
-- JDBC URL del tipo `jdbc:postgresql://127.0.0.1:5432/<DB_NAME>` (el proxy sidecar de la sección 4 escucha ahí).
-- No requiere configurar socket factory en la app ni VPC Access: el proxy ya maneja la conexión cifrada/autenticada contra Cloud SQL.
-- Usuario y password se proveen via env/secrets (ver guía `05`).
+- A JDBC URL like `jdbc:postgresql://127.0.0.1:5432/<DB_NAME>` (the sidecar proxy from section 4 listens there).
+- No socket factory configuration in the app and no VPC Access needed: the proxy already handles the encrypted/authenticated connection to Cloud SQL.
+- User and password are provided via env/secrets (see guide `05`).
 
-#### Enfoque B (alternativo): Cloud SQL Java Connector (socket factory en la app)
+#### Approach B (alternative): Cloud SQL Java Connector (socket factory in the app)
 
-- Usar JDBC URL del tipo `jdbc:postgresql:///<DB_NAME>` con el socket factory de Cloud SQL para Postgres embebido en la app (sin sidecar).
-- Requiere agregar la dependencia del conector al proyecto y proveer `INSTANCE_CONNECTION_NAME`, usuario y password via env/secrets.
-- Tiene sentido si prefieres no correr un sidecar por Pod; es más acoplamiento de código a cambio de un contenedor menos.
+- Use a JDBC URL like `jdbc:postgresql:///<DB_NAME>` with the Cloud SQL socket factory for Postgres embedded in the app (no sidecar).
+- Requires adding the connector dependency to the project and providing `INSTANCE_CONNECTION_NAME`, user and password via env/secrets.
+- It makes sense if you prefer not to run a sidecar per Pod; it means more code coupling in exchange for one less container.
 
-### 6.3 Migraciones (recomendado)
+### 6.3 Migrations (recommended)
 
-En producción no se recomienda depender de `spring.jpa.hibernate.ddl-auto=create`.
+In production, relying on `spring.jpa.hibernate.ddl-auto=create` is not recommended.
 
-Opciones:
+Options:
 
 - Flyway
 - Liquibase
 
-Con el objetivo de:
+With the goal of:
 
-- recrear la DB desde cero por scripts versionados
-- controlar índices/constraints
-- evitar divergencia entre ambientes
+- recreating the DB from scratch with versioned scripts
+- controlling indexes/constraints
+- avoiding drift between environments
 
 ---
 
-## 7) Verificación de conectividad (práctica)
+## 7) Connectivity check (hands-on)
 
-### 7.1 Verifica que el sidecar del proxy esté corriendo
+### 7.1 Check that the proxy sidecar is running
 
 ```bash
 kubectl get pod <wizard-pod-name> -o jsonpath='{.status.containerStatuses[*].name}'
 ```
 
-Deberías ver tanto `wizard-service` como `cloud-sql-proxy` en estado `Running`.
+You should see both `wizard-service` and `cloud-sql-proxy` in the `Running` state.
 
-### 7.2 Verifica logs de arranque
+### 7.2 Check the startup logs
 
-Si la app intenta conectar a DB al iniciar, verás errores claros (auth/URL/timeout) en los logs de cualquiera de los dos contenedores del Pod:
+If the app tries to connect to the DB on startup, you will see clear errors (auth/URL/timeout) in the logs of either of the Pod's two containers:
 
 ```bash
 kubectl logs <wizard-pod-name> -c wizard-service --tail=100
@@ -337,10 +337,9 @@ kubectl logs <wizard-pod-name> -c cloud-sql-proxy --tail=100
 
 ---
 
-## 8) Recomendaciones de producción (resumen)
+## 8) Production recommendations (summary)
 
-- **Backups** habilitados y probados (restore).
-- **Alta disponibilidad** (HA) en entornos productivos (si el presupuesto lo permite).
-- **Rotación de credenciales**.
-- Preferir **private IP** cuando operes en entorno con requisitos estrictos (implica VPC Access y más configuración).
-
+- **Backups** enabled and tested (restore).
+- **High availability** (HA) in production environments (if the budget allows).
+- **Credential rotation**.
+- Prefer a **private IP** when operating in environments with strict requirements (it involves VPC Access and more configuration).

@@ -1,119 +1,118 @@
-## 11 — Checklist de producción y costos
+## 11 — Production checklist and costs
 
-### Objetivo
+### Goal
 
-Tener un checklist práctico para pasar de "funciona" a "operable en producción" en GCP, y evitar sorpresas de costos.
+Have a practical checklist to go from "it works" to "operable in production" on GCP, and avoid cost surprises.
 
-### Alcance (importante)
+### Scope (important)
 
-- Esta guía es un checklist de operación.
-- No modifica código del repositorio.
+- This guide is an operations checklist.
+- It does not modify the repository code.
 
-### Resumen por categoría
+### Summary by category
 
-| Categoría | Puntos clave |
+| Category | Key points |
 |---|---|
-| Seguridad e IAM | MFA, least privilege, `NetworkPolicy`, Workload Identity, Secret Manager |
-| Identity Platform / Gateway | Providers, validación de tokens, CORS |
-| GKE (operación) | Región, `requests`/`limits`, HPA, node pools |
-| Cloud SQL | Backups, HA, usuarios, migraciones |
-| Observabilidad | Dashboards, alertas, Correlation ID |
-| Costos | Budgets, right-sizing, limpieza de recursos |
+| Security and IAM | MFA, least privilege, `NetworkPolicy`, Workload Identity, Secret Manager |
+| Identity Platform / Gateway | Providers, token validation, CORS |
+| GKE (operations) | Region, `requests`/`limits`, HPA, node pools |
+| Cloud SQL | Backups, HA, users, migrations |
+| Observability | Dashboards, alerts, Correlation ID |
+| Costs | Budgets, right-sizing, resource cleanup |
 
 ---
 
-## 1) Seguridad e IAM
+## 1) Security and IAM
 
-- [ ] **MFA** habilitado para cuentas con permisos altos.
-- [ ] Principio de **least privilege** aplicado (evitar `Owner` en producción).
-- [ ] Services internos de GKE como **`ClusterIP`** (no `LoadBalancer` público) salvo que sea explícitamente requerido.
-- [ ] `NetworkPolicy` definidas restringiendo qué Pods pueden llamarse entre sí (ver guía `08`).
-- [ ] **Workload Identity** configurado para los Pods (sin usar la service account default de los nodos).
+- [ ] **MFA** enabled for accounts with high privileges.
+- [ ] **Least privilege** principle applied (avoid `Owner` in production).
+- [ ] Internal GKE Services as **`ClusterIP`** (not a public `LoadBalancer`) unless explicitly required.
+- [ ] `NetworkPolicy` objects defined, restricting which Pods can call each other (see guide `08`).
+- [ ] **Workload Identity** configured for the Pods (without using the nodes' default service account).
 - [ ] Secret Manager:
-  - [ ] secretos no expuestos en env vars en CI logs
-  - [ ] el GSA de Workload Identity tiene `roles/secretmanager.secretAccessor` únicamente donde corresponde
-- [ ] Rotación de credenciales (DB/users) definida.
+  - [ ] secrets not exposed in env vars in CI logs
+  - [ ] the Workload Identity GSA has `roles/secretmanager.secretAccessor` only where appropriate
+- [ ] Credential rotation (DB/users) defined.
 
 ---
 
-## 2) Identity Platform / API Gateway (si aplica)
+## 2) Identity Platform / API Gateway (if applicable)
 
-- [ ] Provider(s) habilitados (email/password u otros).
-- [ ] Tokens validados correctamente:
-  - [ ] sin token → 401/403
-  - [ ] token inválido → 401/403
-  - [ ] token válido → 200
-- [ ] Gateway enruta a los 3 servicios.
-- [ ] Restricción de CORS (si habrá frontend browser).
+- [ ] Provider(s) enabled (email/password or others).
+- [ ] Tokens validated correctly:
+  - [ ] no token → 401/403
+  - [ ] invalid token → 401/403
+  - [ ] valid token → 200
+- [ ] The Gateway routes to all 3 services.
+- [ ] CORS restriction (if there will be a browser frontend).
 
 ---
 
-## 3) GKE (operación)
+## 3) GKE (operations)
 
-- [ ] Región del cluster correcta (cerca de usuarios y Cloud SQL).
-- [ ] `requests`/`limits` de CPU/memoria adecuados (sin OOM ni throttling en carga normal).
-- [ ] `HorizontalPodAutoscaler` configurado si la carga es variable.
-- [ ] Node pools dimensionados conscientemente (Standard) o límites de recursos del namespace (Autopilot).
-- [ ] Liveness/Readiness probes configuradas.
-- [ ] Logs revisados (sin credenciales).
-- [ ] Variables de entorno y secretos documentados por servicio.
+- [ ] Correct cluster region (close to the users and to Cloud SQL).
+- [ ] Appropriate CPU/memory `requests`/`limits` (no OOM or throttling under normal load).
+- [ ] `HorizontalPodAutoscaler` configured if the load is variable.
+- [ ] Node pools sized deliberately (Standard) or namespace resource limits (Autopilot).
+- [ ] Liveness/Readiness probes configured.
+- [ ] Logs reviewed (no credentials).
+- [ ] Environment variables and secrets documented per service.
 
 ---
 
 ## 4) Cloud SQL (Postgres)
 
-- [ ] Backups habilitados.
-- [ ] Retención definida.
-- [ ] (Si aplica) HA habilitado.
-- [ ] Usuarios por microservicio (no usar superuser para apps).
-- [ ] Monitoreo de conexiones y límites de pooling.
-- [ ] Plan de migraciones (Flyway/Liquibase) definido.
+- [ ] Backups enabled.
+- [ ] Retention defined.
+- [ ] (If applicable) HA enabled.
+- [ ] Users per microservice (do not use the superuser for apps).
+- [ ] Monitoring of connections and pooling limits.
+- [ ] Migration plan (Flyway/Liquibase) defined.
 
 ---
 
-## 5) Observabilidad
+## 5) Observability
 
-- [ ] Dashboard(s) básicos:
+- [ ] Basic dashboard(s):
   - requests/min
-  - latencia p95
+  - p95 latency
   - 4xx/5xx
-- [ ] Alertas mínimas:
-  - 5xx > umbral
-  - latencia p95 > umbral
-- [ ] Correlation ID (`X-Correlation-Id`) presente en requests y trazable en logs.
+- [ ] Minimum alerts:
+  - 5xx > threshold
+  - p95 latency > threshold
+- [ ] Correlation ID (`X-Correlation-Id`) present in requests and traceable in the logs.
 
 ---
 
-## 6) Costos: control y prevención
+## 6) Costs: control and prevention
 
-### 6.1 Budgets y alertas
+### 6.1 Budgets and alerts
 
-En Cloud Console:
+In Cloud Console:
 
 1. Billing → Budgets & alerts
-2. Crea un budget mensual (ej. USD 20/50/100)
-3. Configura alertas al 50%, 90%, 100%
+2. Create a monthly budget (e.g. USD 20/50/100)
+3. Set alerts at 50%, 90%, 100%
 
-### 6.2 Recomendaciones para no gastar de más
+### 6.2 Recommendations to avoid overspending
 
 - GKE:
-  - en Autopilot, ajusta `requests` al uso real — pagas por lo que reservan los Pods, no por lo que realmente usan
-  - en Standard, dimensiona el node pool y habilita autoscaling de nodos para no pagar VMs idle
-  - limita el `HorizontalPodAutoscaler` (`maxReplicas`) para controlar picos de costo
+  - on Autopilot, tune `requests` to the real usage — you pay for what the Pods reserve, not for what they actually use
+  - on Standard, size the node pool and enable node autoscaling so you don't pay for idle VMs
+  - cap the `HorizontalPodAutoscaler` (`maxReplicas`) to control cost spikes
 - Cloud SQL:
-  - elige tier acorde a dev/stg/prod
-  - apaga/borra recursos de ambientes temporales
+  - pick a tier that matches dev/stg/prod
+  - stop/delete the resources of temporary environments
 - Artifact Registry:
-  - limpia imágenes viejas (retention policy)
+  - clean up old images (retention policy)
 
 ---
 
-## 7) Checklist final (go/no-go)
+## 7) Final checklist (go/no-go)
 
-- [ ] Acceso público deshabilitado en servicios internos.
-- [ ] Gateway funcionando con auth.
-- [ ] DB con backups y credenciales seguras.
-- [ ] Alertas activas y probadas (al menos una).
-- [ ] Presupuesto configurado.
-- [ ] Procedimiento de rollback (re-deploy versión anterior) definido.
-
+- [ ] Public access disabled on internal services.
+- [ ] Gateway working with auth.
+- [ ] DB with backups and secure credentials.
+- [ ] Alerts active and tested (at least one).
+- [ ] Budget configured.
+- [ ] Rollback procedure (redeploy the previous version) defined.
