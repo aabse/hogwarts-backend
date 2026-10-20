@@ -20,7 +20,7 @@ dependencies {
 
     runtimeOnly 'com.h2database:h2'
 
-    // Cloud SQL Java Connector (perfil "gcp")
+    // Cloud SQL Java Connector ("gcp" profile)
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'com.google.cloud.sql:postgres-socket-factory:1.28.1'
 
